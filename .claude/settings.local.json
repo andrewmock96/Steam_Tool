@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Skill(claude-api)",
-      "Skill(claude-api:*)",
-      "PowerShell(cd \"c:\\\\Andrew\\\\Business\\\\Going Indie\\\\Steam_Tool\" && Get-Content .env | ForEach-Object { \\($_ -split '='\\)[0] })"
-    ]
-  }
-}
