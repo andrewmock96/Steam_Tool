@@ -377,7 +377,7 @@ function buildToolbar() {
             <select id="sort-select" class="toolbar-select">
                 <option value="revenue">Sort: Revenue</option>
                 <option value="reviews">Sort: Most Reviews</option>
-                <option value="score">Sort: Best Rated</option>
+                <option value="score">Sort: Review Score (% Positive)</option>
                 <option value="newest">Sort: Newest</option>
                 <option value="price_low">Sort: Price Low→High</option>
                 <option value="price_high">Sort: Price High→Low</option>
@@ -400,7 +400,7 @@ function buildToolbar() {
         <label>Price: <input type="number" id="f-min-price" placeholder="Min" min="0" step="1" class="filter-input"></label>
         <span class="filter-dash">–</span>
         <label><input type="number" id="f-max-price" placeholder="Max" min="0" step="1" class="filter-input"></label>
-        <label>Min Score: <input type="number" id="f-min-score" placeholder="e.g. 70" min="0" max="100" class="filter-input"></label>
+        <label>Min Review %: <input type="number" id="f-min-score" placeholder="e.g. 70" min="0" max="100" class="filter-input"></label>
         <label>Year: <input type="number" id="f-year" placeholder="e.g. 2024" min="2000" max="2030" class="filter-input"></label>
         <button id="apply-filters" class="toolbar-btn apply-btn">Apply</button>
         <button id="clear-filters" class="toolbar-btn">Clear</button>
