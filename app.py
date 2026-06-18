@@ -111,7 +111,7 @@ def _parse_filters(args):
         filters["review_summary.positive_percent"] = {"$gte": min_score}
     year = args.get("year", type=int)
     if year is not None:
-        filters["release_date"] = {"$regex": f"^{year}"}
+        filters["release_date"] = {"$regex": f"{year}"}
     return filters
 
 
