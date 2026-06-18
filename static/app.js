@@ -313,6 +313,8 @@ let activeLimit  = 50;
 let currentPage  = 0;
 let totalGames   = 0;
 let currentBaseUrl = "";
+let activeSort   = "revenue";
+let activeFilters = {};
 
 function totalPages() {
     return Math.max(1, Math.ceil(totalGames / activeLimit));
@@ -364,27 +366,101 @@ function renderPagination() {
     el.innerHTML = html;
 }
 
-function buildLimitControls() {
-    if (document.getElementById("limit-controls")) return;
-    const header   = document.getElementById("results-header");
-    const controls = document.createElement("div");
-    controls.id        = "limit-controls";
-    controls.className = "limit-controls";
-    controls.innerHTML = `
-        <span class="limit-label">Show:</span>
-        <button class="limit-btn active" data-limit="50">50</button>
-        <button class="limit-btn" data-limit="100">100</button>
-        <button class="limit-btn" data-limit="150">150</button>
-    `;
-    header.appendChild(controls);
+function buildToolbar() {
+    if (document.getElementById("results-toolbar")) return;
 
-    controls.addEventListener("click", (e) => {
+    const toolbar = document.createElement("div");
+    toolbar.id = "results-toolbar";
+    toolbar.className = "results-toolbar";
+    toolbar.innerHTML = `
+        <div class="toolbar-left">
+            <select id="sort-select" class="toolbar-select">
+                <option value="revenue">Sort: Revenue</option>
+                <option value="reviews">Sort: Most Reviews</option>
+                <option value="score">Sort: Best Rated</option>
+                <option value="newest">Sort: Newest</option>
+                <option value="price_low">Sort: Price Low→High</option>
+                <option value="price_high">Sort: Price High→Low</option>
+            </select>
+            <button id="filter-toggle" class="toolbar-btn">Filters</button>
+            <button id="export-btn" class="toolbar-btn export-btn">Export CSV</button>
+        </div>
+        <div class="toolbar-right">
+            <span class="limit-label">Show:</span>
+            <button class="limit-btn active" data-limit="50">50</button>
+            <button class="limit-btn" data-limit="100">100</button>
+            <button class="limit-btn" data-limit="150">150</button>
+        </div>
+    `;
+
+    const filterRow = document.createElement("div");
+    filterRow.id = "filter-row";
+    filterRow.className = "filter-row hidden";
+    filterRow.innerHTML = `
+        <label>Price: <input type="number" id="f-min-price" placeholder="Min" min="0" step="1" class="filter-input"></label>
+        <span class="filter-dash">–</span>
+        <label><input type="number" id="f-max-price" placeholder="Max" min="0" step="1" class="filter-input"></label>
+        <label>Min Score: <input type="number" id="f-min-score" placeholder="e.g. 70" min="0" max="100" class="filter-input"></label>
+        <label>Year: <input type="number" id="f-year" placeholder="e.g. 2024" min="2000" max="2030" class="filter-input"></label>
+        <button id="apply-filters" class="toolbar-btn apply-btn">Apply</button>
+        <button id="clear-filters" class="toolbar-btn">Clear</button>
+    `;
+
+    const section = document.querySelector(".results-section");
+    section.insertBefore(filterRow, document.getElementById("results-grid"));
+    section.insertBefore(toolbar, filterRow);
+
+    document.getElementById("sort-select").addEventListener("change", (e) => {
+        activeSort = e.target.value;
+        currentPage = 0;
+        showLoading();
+        loadPage();
+    });
+
+    toolbar.querySelector(".toolbar-right").addEventListener("click", (e) => {
         const btn = e.target.closest(".limit-btn");
         if (!btn) return;
         activeLimit = parseInt(btn.dataset.limit);
         currentPage = 0;
+        showLoading();
         loadPage();
     });
+
+    document.getElementById("filter-toggle").addEventListener("click", () => {
+        filterRow.classList.toggle("hidden");
+    });
+
+    document.getElementById("apply-filters").addEventListener("click", applyFilters);
+    document.getElementById("clear-filters").addEventListener("click", () => {
+        document.querySelectorAll(".filter-input").forEach(i => i.value = "");
+        activeFilters = {};
+        currentPage = 0;
+        showLoading();
+        loadPage();
+    });
+
+    document.getElementById("export-btn").addEventListener("click", () => {
+        if (!activeGenre) return;
+        const params = new URLSearchParams(activeFilters);
+        window.open(`/api/export/genre/${encodeURIComponent(activeGenre)}?${params}`, "_blank");
+    });
+}
+
+function applyFilters() {
+    const minPrice = document.getElementById("f-min-price").value;
+    const maxPrice = document.getElementById("f-max-price").value;
+    const minScore = document.getElementById("f-min-score").value;
+    const year     = document.getElementById("f-year").value;
+
+    activeFilters = {};
+    if (minPrice) activeFilters.min_price = minPrice;
+    if (maxPrice) activeFilters.max_price = maxPrice;
+    if (minScore) activeFilters.min_score = minScore;
+    if (year)     activeFilters.year = year;
+
+    currentPage = 0;
+    showLoading();
+    loadPage();
 }
 
 document.getElementById("pagination").addEventListener("click", (e) => {
@@ -398,10 +474,21 @@ document.getElementById("pagination").addEventListener("click", (e) => {
     }
 });
 
+function buildQueryString() {
+    const params = new URLSearchParams();
+    params.set("page", currentPage);
+    params.set("limit", activeLimit);
+    params.set("sort", activeSort);
+    for (const [k, v] of Object.entries(activeFilters)) {
+        if (v !== "" && v !== undefined) params.set(k, v);
+    }
+    return params.toString();
+}
+
 async function loadPage() {
     try {
         const sep = currentBaseUrl.includes("?") ? "&" : "?";
-        const url = `${currentBaseUrl}${sep}page=${currentPage}&limit=${activeLimit}`;
+        const url = `${currentBaseUrl}${sep}${buildQueryString()}`;
         const res  = await fetch(url);
         const data = await res.json();
 
@@ -428,11 +515,24 @@ async function fetchGames(baseUrl, title) {
     currentBaseUrl = baseUrl;
     activeLimit    = activeLimit || 50;
     currentPage    = 0;
+    activeSort     = "revenue";
+    activeFilters  = {};
 
     document.getElementById("results-title").textContent = title;
     document.getElementById("results-header").classList.remove("hidden");
 
-    buildLimitControls();
+    buildToolbar();
+
+    const sortSelect = document.getElementById("sort-select");
+    if (sortSelect) sortSelect.value = "revenue";
+    document.querySelectorAll(".filter-input").forEach(i => i.value = "");
+    const filterRow = document.getElementById("filter-row");
+    if (filterRow) filterRow.classList.add("hidden");
+
+    document.querySelectorAll(".limit-btn").forEach(btn => {
+        btn.classList.toggle("active", parseInt(btn.dataset.limit) === activeLimit);
+    });
+
     showLoading();
     await loadPage();
 }

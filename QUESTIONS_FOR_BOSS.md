@@ -23,5 +23,5 @@
 
 ## Hosting & Launch
 - Is Render free tier fine for launch, or should we upgrade? (free tier sleeps after 15 min inactivity)
-- Who is the target audience for the initial launch? (indie dev communities, Reddit, Twitter?)
-- Any other PaperOS team members who should review before launch?
+- Who is the target audience for the initial launch? (indie dev communities, Reddit, Twitter?) indie dev communities, solo developers 
+- Any other PaperOS team members who should review before launch? 

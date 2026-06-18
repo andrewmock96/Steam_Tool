@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request, render_template
+from flask import Flask, jsonify, request, render_template, Response
 from pymongo import MongoClient
 from dotenv import load_dotenv
 import os
@@ -94,23 +94,58 @@ def get_game(app_id):
     return jsonify(game)
 
 
-def _sorted_games_pipeline(match_query, page, limit):
+def _parse_filters(args):
+    """Build a MongoDB match dict from query string filter params."""
+    filters = {}
+    min_price = args.get("min_price", type=float)
+    max_price = args.get("max_price", type=float)
+    if min_price is not None or max_price is not None:
+        price_q = {}
+        if min_price is not None:
+            price_q["$gte"] = min_price
+        if max_price is not None:
+            price_q["$lte"] = max_price
+        filters["price.current"] = price_q
+    min_score = args.get("min_score", type=int)
+    if min_score is not None:
+        filters["review_summary.positive_percent"] = {"$gte": min_score}
+    year = args.get("year", type=int)
+    if year is not None:
+        filters["release_date"] = {"$regex": f"^{year}"}
+    return filters
+
+
+def _sorted_games_pipeline(match_query, page, limit, sort_by="revenue"):
     """
-    Aggregation pipeline that sorts by a composite score:
-    - Paid games: estimated_revenue.high (actual revenue estimate)
-    - F2P / zero-revenue games: total_reviews * 150 (proxy — ~$10 effective value × 15 players/review)
-    Returns (results, total).
+    Aggregation pipeline with configurable sort:
+    - revenue (default): composite score (estimated_revenue.low for paid, reviews×150 for F2P)
+    - reviews: total_reviews desc
+    - score: positive_percent desc
+    - newest: release_date desc
+    - price_low / price_high: price.current asc/desc
     """
-    sort_stage = {"$addFields": {"_sort_score": {"$cond": {
+    revenue_sort = {"$addFields": {"_sort_score": {"$cond": {
         "if":   {"$gt": [{"$ifNull": ["$estimated_revenue.low", 0]}, 0]},
         "then": "$estimated_revenue.low",
         "else": {"$multiply": [{"$ifNull": ["$review_summary.total_reviews", 0]}, 150]}
     }}}}
 
-    pipeline = [
-        {"$match": match_query},
-        sort_stage,
-        {"$sort": {"_sort_score": -1}},
+    sort_map = {
+        "revenue":    (revenue_sort, {"_sort_score": -1}),
+        "reviews":    (None, {"review_summary.total_reviews": -1}),
+        "score":      (None, {"review_summary.positive_percent": -1}),
+        "newest":     (None, {"release_date": -1}),
+        "price_low":  (None, {"price.current": 1}),
+        "price_high": (None, {"price.current": -1}),
+    }
+
+    add_fields, sort_spec = sort_map.get(sort_by, sort_map["revenue"])
+
+    pipeline = [{"$match": match_query}]
+    if add_fields:
+        pipeline.append(add_fields)
+    pipeline += [
+        {"$sort": sort_spec},
         {"$skip": page * limit},
         {"$limit": limit},
         {"$project": {"_sort_score": 0, "_id": 0}}
@@ -121,25 +156,59 @@ def _sorted_games_pipeline(match_query, page, limit):
     return results, total
 
 
+@app.route("/api/export/genre/<genre>")
+def export_genre_csv(genre):
+    """Export all games in a genre as CSV."""
+    import csv, io
+    query = {"genres": genre, **_parse_filters(request.args)}
+    games = list(games_col.find(query, {"_id": 0}).sort("estimated_revenue.low", -1).limit(500))
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["Title", "Genres", "Tags", "Price", "Review Score", "Total Reviews",
+                     "Est Revenue Low", "Est Revenue High", "Est Owners Low", "Est Owners High",
+                     "Current Players", "Release Date", "Free to Play"])
+    for g in games:
+        writer.writerow([
+            g.get("title", ""),
+            "; ".join(g.get("genres", [])),
+            "; ".join(g.get("tags", [])[:8]),
+            g.get("price", {}).get("current", ""),
+            g.get("review_summary", {}).get("positive_percent", ""),
+            g.get("review_summary", {}).get("total_reviews", ""),
+            g.get("estimated_revenue", {}).get("low", ""),
+            g.get("estimated_revenue", {}).get("high", ""),
+            g.get("estimated_owners", {}).get("low", ""),
+            g.get("estimated_owners", {}).get("high", ""),
+            g.get("players", {}).get("current", ""),
+            g.get("release_date", ""),
+            g.get("is_free", False)
+        ])
+
+    return Response(buf.getvalue(), mimetype="text/csv",
+                    headers={"Content-Disposition": f"attachment; filename={genre}_games.csv"})
+
+
 @app.route("/api/games/genre/<genre>")
 def get_games_by_genre(genre):
-    """Get a page of games in a specific genre sorted by composite revenue score."""
-    page  = max(0, int(request.args.get("page", 0)))
-    limit = min(150, max(1, int(request.args.get("limit", 50))))
-    results, total = _sorted_games_pipeline({"genres": genre}, page, limit)
+    page    = max(0, int(request.args.get("page", 0)))
+    limit   = min(150, max(1, int(request.args.get("limit", 50))))
+    sort_by = request.args.get("sort", "revenue")
+    query   = {"genres": genre, **_parse_filters(request.args)}
+    results, total = _sorted_games_pipeline(query, page, limit, sort_by)
     return jsonify({"games": results, "total": total, "page": page, "limit": limit})
 
 
 @app.route("/api/games/tag/<tag>")
 def get_games_by_tag(tag):
-    """Get a page of games by tag sorted by composite revenue score."""
-    genre = request.args.get("genre", "")
-    page  = max(0, int(request.args.get("page", 0)))
-    limit = min(150, max(1, int(request.args.get("limit", 50))))
-    query = {"tags": {"$regex": f"^{tag}$", "$options": "i"}}
+    genre   = request.args.get("genre", "")
+    page    = max(0, int(request.args.get("page", 0)))
+    limit   = min(150, max(1, int(request.args.get("limit", 50))))
+    sort_by = request.args.get("sort", "revenue")
+    query   = {"tags": {"$regex": f"^{tag}$", "$options": "i"}, **_parse_filters(request.args)}
     if genre:
         query["genres"] = genre
-    results, total = _sorted_games_pipeline(query, page, limit)
+    results, total = _sorted_games_pipeline(query, page, limit, sort_by)
     return jsonify({"games": results, "total": total, "page": page, "limit": limit})
 
 
