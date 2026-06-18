@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Steam Market Research</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css?v=22">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+    <!-- Top Bar -->
+    <header class="topbar">
+        <div class="topbar-left">
+            <button id="menu-toggle" class="menu-toggle" aria-label="Toggle menu">
+                <span></span><span></span><span></span>
+            </button>
+            <svg class="brand-icon" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M10 2L18 17H2L10 2Z" fill="url(#brandGrad)"/>
+                <defs>
+                    <linearGradient id="brandGrad" x1="10" y1="2" x2="10" y2="17" gradientUnits="userSpaceOnUse">
+                        <stop stop-color="#a5b4fc"/>
+                        <stop offset="1" stop-color="#6366f1"/>
+                    </linearGradient>
+                </defs>
+            </svg>
+            <span class="brand-name">Steam Research</span>
+        </div>
+        <div id="sidebar-backdrop" class="sidebar-backdrop hidden"></div>
+        <div class="topbar-right">
+            <button id="chat-toggle">
+                <span>✦</span>
+                Ask AI
+            </button>
+        </div>
+    </header>
+
+    <!-- App Shell: sidebar + main -->
+    <div class="app-shell">
+
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-inner">
+
+                <!-- Search -->
+                <div class="sidebar-search">
+                    <div class="search-wrap">
+                        <svg class="search-icon" viewBox="0 0 16 16" fill="none">
+                            <circle cx="6.5" cy="6.5" r="4" stroke="currentColor" stroke-width="1.4"/>
+                            <path d="M10 10L13.5 13.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                        </svg>
+                        <input type="text" id="search-input" placeholder="Search games…">
+                    </div>
+                </div>
+
+                <!-- Genre Nav -->
+                <div class="sidebar-section">
+                    <div class="sidebar-label">Genres</div>
+                    <nav class="genre-nav" id="genre-nav">
+                        <button class="genre-item" data-genre="Action">Action</button>
+                        <button class="genre-item" data-genre="Adventure">Adventure</button>
+                        <button class="genre-item" data-genre="Casual">Casual</button>
+                        <button class="genre-item" data-genre="Indie">Indie</button>
+                        <button class="genre-item" data-genre="RPG">RPG</button>
+                        <button class="genre-item" data-genre="Simulation">Simulation</button>
+                        <button class="genre-item" data-genre="Strategy">Strategy</button>
+                        <button class="genre-item" data-genre="Sports">Sports</button>
+                        <button class="genre-item" data-genre="Racing">Racing</button>
+                    </nav>
+                </div>
+
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+
+            <!-- Home: AI Hero -->
+            <section id="overview-section" class="home-hero">
+                <div class="hero-content">
+                    <h1 class="hero-title">Steam Market Intelligence</h1>
+                    <p class="hero-sub">Ask anything about genres, revenue, competitors, or opportunity on Steam.</p>
+                    <div class="hero-input-wrap">
+                        <input type="text" id="hero-input" placeholder="e.g. How competitive is the roguelike market?">
+                        <button id="hero-send">Ask AI</button>
+                    </div>
+                    <div class="hero-suggestions">
+                        <button class="suggestion-chip">What genres make the most money?</button>
+                        <button class="suggestion-chip">How competitive is the FPS market?</button>
+                        <button class="suggestion-chip">Best price point for an indie game?</button>
+                        <button class="suggestion-chip">What's the roguelike opportunity?</button>
+                    </div>
+                </div>
+                <div id="hero-response" class="hero-response hidden"></div>
+
+                <!-- Genre Trend Chart -->
+                <div class="home-chart">
+                    <div class="chart-card">
+                        <div class="chart-title">Player Trends by Genre</div>
+                        <div class="chart-wrap"><canvas id="chart-genre"></canvas></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Market Overview (appears when a genre is selected) -->
+            <section id="market-section" class="market-section hidden">
+                <div class="market-header">
+                    <h2 id="market-title">Market Overview</h2>
+                    <span class="market-note">Steam PC estimates only</span>
+                </div>
+                <div id="market-grid" class="market-grid"></div>
+            </section>
+
+            <!-- Results -->
+            <section class="results-section">
+                <div id="results-header" class="results-header hidden">
+                    <div class="results-header-left">
+                        <h2 id="results-title">Results</h2>
+                        <span id="results-count"></span>
+                    </div>
+                </div>
+                <div id="results-grid" class="results-grid"></div>
+                <p id="no-results" class="no-results hidden">No games found.</p>
+                <div id="pagination" class="pagination"></div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- Game Detail Slide-over -->
+    <div id="detail-panel" class="detail-panel hidden">
+        <div class="detail-panel-inner">
+            <button id="close-panel">✕ Close</button>
+            <div id="detail-content"></div>
+        </div>
+    </div>
+
+    <!-- AI Chat Widget -->
+    <div id="chat-widget">
+        <div id="chat-panel" class="hidden">
+            <div class="chat-header">
+                <div class="chat-header-title">
+                    <span>✦</span>
+                    Steam Market AI
+                </div>
+                <button id="chat-close">✕</button>
+            </div>
+            <div id="chat-messages">
+                <div class="chat-message assistant">
+                    <div class="chat-bubble">
+                        Ask me anything about the Steam market — genre size, competitor analysis, revenue estimates, or how to launch your game.
+                    </div>
+                </div>
+            </div>
+            <div class="chat-input-row">
+                <input type="text" id="chat-input" placeholder="e.g. What's the roguelike market like?" />
+                <button id="chat-send">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js?v=22"></script>
+
+</body>
+</html>
