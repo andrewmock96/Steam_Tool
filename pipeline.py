@@ -180,4 +180,8 @@ def sync_all_genres():
 
 
 if __name__ == "__main__":
+    import sys
+    if "--force" in sys.argv:
+        print("Force mode: clearing sync log to re-fetch all genres/tags.\n")
+        sync_log_col.delete_many({})
     sync_all_genres()

@@ -417,6 +417,13 @@ async function loadPage() {
     }
 }
 
+function showLoading() {
+    const grid = document.getElementById("results-grid");
+    grid.innerHTML = `<div class="loading-state"><div class="chat-typing"><span></span><span></span><span></span></div></div>`;
+    document.getElementById("no-results").classList.add("hidden");
+    document.getElementById("pagination").innerHTML = "";
+}
+
 async function fetchGames(baseUrl, title) {
     currentBaseUrl = baseUrl;
     activeLimit    = activeLimit || 50;
@@ -426,6 +433,7 @@ async function fetchGames(baseUrl, title) {
     document.getElementById("results-header").classList.remove("hidden");
 
     buildLimitControls();
+    showLoading();
     await loadPage();
 }
 

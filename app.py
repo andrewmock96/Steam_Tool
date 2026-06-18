@@ -349,9 +349,17 @@ STEAM_SUBGENRES = {
     ]
 }
 
+_subgenre_cache = {}
+_subgenre_cache_time = {}
+
 @app.route("/api/subgenres/<genre>")
 def get_subgenres(genre):
-    """Return subgenres for a genre that have at least 10 games within that genre, with counts."""
+    """Return subgenres for a genre with counts. Cached for 1 hour."""
+    import time as _time
+    now = _time.time()
+    if genre in _subgenre_cache and now - _subgenre_cache_time.get(genre, 0) < 3600:
+        return jsonify(_subgenre_cache[genre])
+
     tags = STEAM_SUBGENRES.get(genre, [])
     available = []
     for tag in tags:
@@ -361,6 +369,9 @@ def get_subgenres(genre):
         })
         if count >= 10:
             available.append({"tag": tag, "count": count})
+
+    _subgenre_cache[genre] = available
+    _subgenre_cache_time[genre] = now
     return jsonify(available)
 
 

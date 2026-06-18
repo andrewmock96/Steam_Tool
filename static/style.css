@@ -895,6 +895,13 @@ body {
     font-size: 0.875rem;
 }
 
+.loading-state {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: center;
+    padding: 80px 0;
+}
+
 /* ─── AI Chat Widget ─── */
 #chat-widget {
     position: fixed;
