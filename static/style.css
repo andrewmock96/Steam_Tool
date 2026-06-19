@@ -1,3 +1,41 @@
+/* ─── Fonts ─── */
+@font-face {
+    font-family: 'Visby CF';
+    src: url('/static/fonts/VisbyCF-ExtraBold.otf') format('opentype');
+    font-weight: 800;
+    font-display: swap;
+}
+@font-face {
+    font-family: 'Visby CF';
+    src: url('/static/fonts/VisbyCF-Bold.otf') format('opentype');
+    font-weight: 700;
+    font-display: swap;
+}
+@font-face {
+    font-family: 'RNS Sans';
+    src: url('/static/fonts/RNSSanz-Normal.woff2') format('woff2');
+    font-weight: 400;
+    font-display: swap;
+}
+@font-face {
+    font-family: 'RNS Sans';
+    src: url('/static/fonts/RNSSanz-Medium.woff2') format('woff2');
+    font-weight: 500;
+    font-display: swap;
+}
+@font-face {
+    font-family: 'RNS Sans';
+    src: url('/static/fonts/RNSSanz-SemiBold.woff2') format('woff2');
+    font-weight: 600;
+    font-display: swap;
+}
+@font-face {
+    font-family: 'RNS Sans';
+    src: url('/static/fonts/RNSSanz-Bold.woff2') format('woff2');
+    font-weight: 700;
+    font-display: swap;
+}
+
 /* ─── Reset & Variables ─── */
 *, *::before, *::after {
     margin: 0;
@@ -6,32 +44,37 @@
 }
 
 :root {
-    --bg:           #07070e;
-    --surface:      #0c0c18;
-    --card:         #10101e;
-    --card-hover:   #14142a;
-    --border:       #1c1c30;
-    --border-lit:   #3a3a62;
-    --accent:       #6366f1;
-    --accent-2:     #8b5cf6;
-    --accent-glow:  rgba(99, 102, 241, 0.18);
-    --text:         #e2e2f0;
-    --text-muted:   #6b6b90;
-    --text-dim:     #2e2e48;
+    --bg:           #0A0E13;
+    --surface:      #0f1319;
+    --card:         #1D2735;
+    --card-hover:   #243040;
+    --border:       #263042;
+    --border-lit:   #3a506e;
+    --accent:       #1781FF;
+    --accent-2:     #3d9bff;
+    --accent-glow:  rgba(23, 129, 255, 0.18);
+    --text:         #E7EFF7;
+    --text-muted:   #7a8da3;
+    --text-dim:     #344050;
     --positive:     #4ade80;
     --mixed:        #fbbf24;
     --negative:     #f87171;
-    --free:         #38bdf8;
+    --free:         #1781FF;
     --sidebar-w:    228px;
     --topbar-h:     52px;
     --radius:       10px;
     --radius-lg:    14px;
     --ease:         0.16s ease;
+    --font-head:    'Visby CF', 'RNS Sans', system-ui, sans-serif;
+    --font-body:    'RNS Sans', 'Segoe UI', system-ui, sans-serif;
 }
 
 body {
-    font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+    font-family: var(--font-body);
     background: var(--bg);
+    background-image: url('/static/bg-pattern.png');
+    background-size: 300px;
+    background-repeat: repeat;
     color: var(--text);
     min-height: 100vh;
     -webkit-font-smoothing: antialiased;
@@ -98,15 +141,16 @@ body {
     backdrop-filter: blur(2px);
 }
 
-.brand-icon {
-    width: 22px;
-    height: 22px;
+.brand-logo {
+    height: 26px;
+    width: auto;
     flex-shrink: 0;
 }
 
 .brand-name {
-    font-size: 0.925rem;
-    font-weight: 700;
+    font-family: var(--font-head);
+    font-size: 1rem;
+    font-weight: 800;
     color: #ffffff;
     letter-spacing: -0.2px;
 }
@@ -116,7 +160,7 @@ body {
     align-items: center;
     gap: 7px;
     padding: 8px 18px;
-    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    background: var(--accent);
     color: #fff;
     border: none;
     border-radius: 999px;
@@ -125,12 +169,12 @@ body {
     font-weight: 600;
     cursor: pointer;
     transition: opacity var(--ease), box-shadow var(--ease);
-    box-shadow: 0 2px 16px rgba(99,102,241,0.35);
+    box-shadow: 0 2px 16px rgba(23,129,255,0.35);
 }
 
 .topbar-right #chat-toggle:hover {
     opacity: 0.88;
-    box-shadow: 0 4px 24px rgba(99,102,241,0.55);
+    box-shadow: 0 4px 24px rgba(23,129,255,0.55);
 }
 
 /* ─── App Shell ─── */
@@ -247,8 +291,8 @@ body {
 }
 
 .genre-item.active {
-    background: rgba(99,102,241,0.14);
-    color: #a5b4fc;
+    background: rgba(23,129,255,0.14);
+    color: #5eaaff;
     font-weight: 600;
 }
 
@@ -258,7 +302,7 @@ body {
     flex-direction: column;
     gap: 1px;
     padding: 4px 0 6px 14px;
-    border-left: 2px solid rgba(99,102,241,0.22);
+    border-left: 2px solid rgba(23,129,255,0.22);
     margin-left: 10px;
     margin-bottom: 2px;
 }
@@ -288,8 +332,8 @@ body {
 }
 
 .subgenre-nav-item.active {
-    background: rgba(99,102,241,0.1);
-    color: #a5b4fc;
+    background: rgba(23,129,255,0.1);
+    color: #5eaaff;
     font-weight: 500;
 }
 
@@ -334,11 +378,12 @@ body {
 }
 
 .hero-title {
+    font-family: var(--font-head);
     font-size: 2.2rem;
-    font-weight: 700;
+    font-weight: 800;
     letter-spacing: -1px;
     line-height: 1.15;
-    background: linear-gradient(135deg, #ffffff 30%, #a5b4fc 100%);
+    background: linear-gradient(135deg, #ffffff 30%, #1781FF 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -383,7 +428,7 @@ body {
 
 #hero-send {
     padding: 11px 24px;
-    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    background: var(--accent);
     color: #fff;
     border: none;
     border-radius: 12px;
@@ -396,7 +441,7 @@ body {
     flex-shrink: 0;
 }
 
-#hero-send:hover    { opacity: 0.88; box-shadow: 0 4px 20px rgba(99,102,241,0.4); }
+#hero-send:hover    { opacity: 0.88; box-shadow: 0 4px 20px rgba(23,129,255,0.4); }
 #hero-send:disabled { opacity: 0.35; cursor: not-allowed; }
 
 .hero-suggestions {
@@ -421,8 +466,8 @@ body {
 
 .suggestion-chip:hover {
     border-color: var(--accent);
-    color: #a5b4fc;
-    background: rgba(99,102,241,0.06);
+    color: #5eaaff;
+    background: rgba(23,129,255,0.06);
 }
 
 .hero-response {
@@ -519,8 +564,9 @@ body {
 }
 
 .market-header h2 {
+    font-family: var(--font-head);
     font-size: 1.05rem;
-    font-weight: 700;
+    font-weight: 800;
     letter-spacing: -0.2px;
 }
 
@@ -546,8 +592,8 @@ body {
 .market-card:hover { border-color: var(--border-lit); }
 
 .market-card.highlight {
-    border-color: rgba(99,102,241,0.35);
-    background: linear-gradient(135deg, var(--card), rgba(99,102,241,0.06));
+    border-color: rgba(23,129,255,0.35);
+    background: linear-gradient(135deg, var(--card), rgba(23,129,255,0.06));
 }
 
 .market-label {
@@ -569,10 +615,7 @@ body {
 }
 
 .market-card.highlight .market-value {
-    background: linear-gradient(135deg, #a5b4fc, #c4b5fd);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    color: var(--accent);
 }
 
 .market-desc {
@@ -600,8 +643,9 @@ body {
 }
 
 .results-header h2 {
+    font-family: var(--font-head);
     font-size: 1.05rem;
-    font-weight: 700;
+    font-weight: 800;
     letter-spacing: -0.2px;
 }
 
@@ -798,7 +842,7 @@ body {
 .game-card:hover {
     transform: translateY(-3px);
     border-color: var(--border-lit);
-    box-shadow: 0 10px 36px rgba(0,0,0,0.45), 0 0 0 1px rgba(99,102,241,0.1);
+    box-shadow: 0 10px 36px rgba(0,0,0,0.45), 0 0 0 1px rgba(23,129,255,0.1);
 }
 
 .game-card img {
@@ -917,8 +961,9 @@ body {
 }
 
 .detail-title {
+    font-family: var(--font-head);
     font-size: 1.25rem;
-    font-weight: 700;
+    font-weight: 800;
     color: #fff;
     margin-bottom: 5px;
     letter-spacing: -0.3px;

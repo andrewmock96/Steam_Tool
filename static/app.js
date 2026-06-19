@@ -40,15 +40,15 @@ const SUBGENRES = {
 let genreChart = null;
 
 const GENRE_COLORS = {
-    "Action":     "#7c6fd4",
-    "Adventure":  "#5a9fd4",
-    "Casual":     "#d45a9f",
-    "Indie":      "#7cc47c",
+    "Action":     "#1781FF",
+    "Adventure":  "#5eaaff",
+    "Casual":     "#e05298",
+    "Indie":      "#4ade80",
     "RPG":        "#d4a45a",
-    "Simulation": "#5ac4c4",
-    "Strategy":   "#d45a5a",
+    "Simulation": "#38bdf8",
+    "Strategy":   "#f87171",
     "Sports":     "#a57cd4",
-    "Racing":     "#5ad47c"
+    "Racing":     "#fbbf24"
 };
 
 async function loadOverview() {
@@ -103,7 +103,7 @@ function renderGenreChart(genres, trend) {
                     labels: { color: "#6b6b90", boxWidth: 10, boxHeight: 10, borderRadius: 2, useBorderRadius: true, padding: 14, font: { size: 11 } }
                 },
                 tooltip: {
-                    backgroundColor: "#13131f", borderColor: "#2a2a4a", borderWidth: 1, padding: 12,
+                    backgroundColor: "#1D2735", borderColor: "#263042", borderWidth: 1, padding: 12,
                     callbacks: { label: ctx => ` ${ctx.dataset.label}: ${formatNumber(ctx.parsed.y)} players` }
                 }
             },

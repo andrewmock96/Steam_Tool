@@ -3,17 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Steam Market Research — Genre Analytics & Revenue Estimates</title>
-    <meta name="description" content="Research Steam game markets, analyze competitors, and estimate revenue. Free tool for indie game developers.">
-    <meta name="theme-color" content="#07070e">
-    <meta property="og:title" content="Steam Market Research">
+    <title>Going Indie — Steam Market Research for Indie Developers</title>
+    <meta name="description" content="Research Steam game markets, analyze competitors, and estimate revenue. Free tool for indie game developers and solo studios.">
+    <meta name="theme-color" content="#0A0E13">
+    <meta property="og:title" content="Going Indie — Steam Market Research">
     <meta property="og:description" content="Research Steam game markets, analyze competitors, and estimate revenue for indie developers.">
     <meta property="og:type" content="website">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'><path d='M10 2L18 17H2Z' fill='%236366f1'/></svg>">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css?v=23">
+    <link rel="icon" href="/static/favicon.png" type="image/png">
+    <link rel="stylesheet" href="/static/style.css?v=24">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
@@ -24,16 +21,8 @@
             <button id="menu-toggle" class="menu-toggle" aria-label="Toggle menu">
                 <span></span><span></span><span></span>
             </button>
-            <svg class="brand-icon" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M10 2L18 17H2L10 2Z" fill="url(#brandGrad)"/>
-                <defs>
-                    <linearGradient id="brandGrad" x1="10" y1="2" x2="10" y2="17" gradientUnits="userSpaceOnUse">
-                        <stop stop-color="#a5b4fc"/>
-                        <stop offset="1" stop-color="#6366f1"/>
-                    </linearGradient>
-                </defs>
-            </svg>
-            <span class="brand-name">Steam Research</span>
+            <img src="/static/logo.png" alt="Going Indie" class="brand-logo">
+            <span class="brand-name">Going Indie</span>
         </div>
         <div id="sidebar-backdrop" class="sidebar-backdrop hidden"></div>
         <div class="topbar-right">
@@ -87,8 +76,8 @@
             <!-- Home: AI Hero -->
             <section id="overview-section" class="home-hero">
                 <div class="hero-content">
-                    <h1 class="hero-title">Steam Market Intelligence</h1>
-                    <p class="hero-sub">Ask anything about genres, revenue, competitors, or opportunity on Steam.</p>
+                    <h1 class="hero-title">Your Indie Game Starts Here</h1>
+                    <p class="hero-sub">Research genres, analyze competitors, estimate revenue, and plan your launch on Steam.</p>
                     <div class="hero-input-wrap">
                         <input type="text" id="hero-input" placeholder="e.g. How competitive is the roguelike market?">
                         <button id="hero-send">Ask AI</button>
@@ -168,7 +157,7 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=23"></script>
+    <script src="/static/app.js?v=24"></script>
 
 </body>
 </html>
