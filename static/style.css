@@ -541,16 +541,7 @@ body {
     overflow: hidden;
 }
 
-.chart-card::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, var(--accent), transparent);
-    opacity: 0.4;
-}
+/* removed top glow line */
 
 .chart-header-row {
     display: flex;
