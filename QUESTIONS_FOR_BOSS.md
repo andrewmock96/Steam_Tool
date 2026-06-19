@@ -25,3 +25,18 @@
 - Is Render free tier fine for launch, or should we upgrade? (free tier sleeps after 15 min inactivity)
 - Who is the target audience for the initial launch? (indie dev communities, Reddit, Twitter?) indie dev communities, solo developers 
 - Any other PaperOS team members who should review before launch? 
+
+Make data as accurcate as possible
+
+everything you need to start your indie studio, free to start pay to manage, walk through basic busniess, finaces, legal, etc.
+
+Lots of hand holding to help users self publish
+
+step 1.... make an account...
+
+maybe questionarie
+
+gauge where they are at, partners, revuene... okay lets setup an entiey through out partner PaperOS.
+
+okay now lets research your genre, make an plan etc...
+

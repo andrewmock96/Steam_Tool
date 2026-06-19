@@ -194,7 +194,7 @@ def get_games_by_genre(genre):
     page    = max(0, int(request.args.get("page", 0)))
     limit   = min(150, max(1, int(request.args.get("limit", 50))))
     sort_by = request.args.get("sort", "revenue")
-    query   = {"genres": genre, **_parse_filters(request.args)}
+    query   = {"genres": genre, "delisted": {"$ne": True}, **_parse_filters(request.args)}
     results, total = _sorted_games_pipeline(query, page, limit, sort_by)
     return jsonify({"games": results, "total": total, "page": page, "limit": limit})
 
@@ -205,7 +205,7 @@ def get_games_by_tag(tag):
     page    = max(0, int(request.args.get("page", 0)))
     limit   = min(150, max(1, int(request.args.get("limit", 50))))
     sort_by = request.args.get("sort", "revenue")
-    query   = {"tags": {"$regex": f"^{tag}$", "$options": "i"}, **_parse_filters(request.args)}
+    query   = {"tags": {"$regex": f"^{tag}$", "$options": "i"}, "delisted": {"$ne": True}, **_parse_filters(request.args)}
     if genre:
         query["genres"] = genre
     results, total = _sorted_games_pipeline(query, page, limit, sort_by)
@@ -248,7 +248,7 @@ def get_overview():
 def get_market_overview(genre):
     """Compute TAM for a genre from games in the database."""
     games = list(games_col.find(
-        {"genres": genre},
+        {"genres": genre, "delisted": {"$ne": True}},
         {"_id": 0, "estimated_revenue": 1, "price": 1, "review_summary": 1, "is_free": 1}
     ))
 
@@ -282,7 +282,7 @@ def get_market_overview(genre):
 def get_market_by_tag(tag):
     """Compute SAM/SOM for a subgenre tag, optionally filtered by parent genre."""
     genre = request.args.get("genre", "")
-    query = {"tags": {"$regex": f"^{tag}$", "$options": "i"}}
+    query = {"tags": {"$regex": f"^{tag}$", "$options": "i"}, "delisted": {"$ne": True}}
     if genre:
         query["genres"] = genre
     games = list(games_col.find(
@@ -434,7 +434,8 @@ def get_subgenres(genre):
     for tag in tags:
         count = games_col.count_documents({
             "genres": genre,
-            "tags": {"$regex": f"^{tag}$", "$options": "i"}
+            "tags": {"$regex": f"^{tag}$", "$options": "i"},
+            "delisted": {"$ne": True}
         })
         if count >= 10:
             available.append({"tag": tag, "count": count})

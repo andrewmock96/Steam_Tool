@@ -190,10 +190,27 @@ def parse_game(steam_data, spy_data):
     owners_raw = spy_data.get("owners", "0 .. 0").split(" .. ")
     owner_low  = int(owners_raw[0].replace(",", ""))
     owner_high = int(owners_raw[1].replace(",", ""))
-    current_price = price["current"] if price["current"] > 0 else price["initial"]
+
+    initial_price = price["initial"]
+    current_price = price["current"]
+    avg_price = (initial_price + current_price) / 2 if initial_price > 0 else current_price
+    if avg_price == 0:
+        avg_price = current_price
+
+    # Steam's tiered revenue share: 30% up to $10M, 25% to $50M, 20% above
+    def _steam_dev_share(gross):
+        if gross <= 10_000_000:
+            return gross * 0.70
+        elif gross <= 50_000_000:
+            return 10_000_000 * 0.70 + (gross - 10_000_000) * 0.75
+        else:
+            return 10_000_000 * 0.70 + 40_000_000 * 0.75 + (gross - 50_000_000) * 0.80
+
+    gross_low  = owner_low  * avg_price
+    gross_high = owner_high * avg_price
     estimated_revenue = {
-        "low":  round(owner_low  * current_price * 0.7),
-        "high": round(owner_high * current_price * 0.7)
+        "low":  round(_steam_dev_share(gross_low)),
+        "high": round(_steam_dev_share(gross_high))
     }
 
     # --- Genres, tags, platforms ---
