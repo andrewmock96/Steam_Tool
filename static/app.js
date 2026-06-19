@@ -279,12 +279,12 @@ async function fetchMarketOverview(name, isSubgenre = false, parentGenre = null)
                 <div class="market-desc">${data.paid_games} paid · Avg $${data.avg_price} · ${data.avg_review_score}% positive</div>
             </div>
             <div class="market-card">
-                <div class="market-label">Serviceable Market (SAM)</div>
+                <div class="market-label">Serviceable Market</div>
                 <div class="market-value">${formatMoney(data.SAM.low)} – ${formatMoney(data.SAM.high)}</div>
                 <div class="market-desc">${data.SAM.description}</div>
             </div>
             <div class="market-card highlight">
-                <div class="market-label">Your Realistic Capture (SOM)</div>
+                <div class="market-label">Your Realistic Capture</div>
                 <div class="market-value">${formatMoney(data.SOM.low)} – ${formatMoney(data.SOM.high)}</div>
                 <div class="market-desc">${data.SOM.description}</div>
             </div>
@@ -295,7 +295,7 @@ async function fetchMarketOverview(name, isSubgenre = false, parentGenre = null)
                 <div class="market-desc">${data.paid_games} paid · Avg $${data.avg_price} · ${data.avg_review_score}% positive</div>
             </div>
             <div class="market-card highlight">
-                <div class="market-label">Total Addressable Market (TAM)</div>
+                <div class="market-label">Total Addressable Market</div>
                 <div class="market-value">${formatMoney(data.TAM.low)} – ${formatMoney(data.TAM.high)}</div>
                 <div class="market-desc">${data.TAM.description}</div>
             </div>
