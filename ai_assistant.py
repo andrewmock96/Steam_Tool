@@ -11,7 +11,7 @@ _mongo = MongoClient(os.getenv("MONGO_URI"))
 _db = _mongo["steam_tool"]
 _games = _db["games"]
 
-MODEL = "claude-opus-4-8"
+MODEL = "claude-haiku-4-5"
 
 TOOLS = [
     {
