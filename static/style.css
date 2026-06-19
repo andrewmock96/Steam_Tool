@@ -527,37 +527,92 @@ body {
 
 /* ─── Home Chart ─── */
 .home-chart {
-    max-width: 800px;
+    max-width: 860px;
     width: 100%;
-    margin: 40px auto 0;
+    margin: 48px auto 0;
 }
 
 .chart-card {
     background: var(--card);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
-    padding: 22px 24px 18px;
+    padding: 24px 28px 20px;
+    position: relative;
+    overflow: hidden;
+}
+
+.chart-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    opacity: 0.4;
+}
+
+.chart-header-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    gap: 16px;
 }
 
 .chart-title {
-    font-size: 0.68rem;
-    font-weight: 600;
+    font-family: var(--font-head);
+    font-size: 1rem;
+    font-weight: 800;
+    color: #fff;
+    letter-spacing: -0.2px;
+}
+
+.chart-subtitle {
+    font-size: 0.75rem;
     color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    margin-bottom: 18px;
+    margin-top: 3px;
+}
+
+.chart-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    justify-content: flex-end;
+}
+
+.chart-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: opacity var(--ease);
+    padding: 2px 0;
+}
+
+.chart-legend-item:hover { opacity: 0.7; }
+
+.chart-legend-item.dimmed { opacity: 0.25; }
+
+.chart-legend-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
 }
 
 .chart-wrap {
     position: relative;
-    height: 260px;
+    height: 280px;
 }
 
 .chart-empty {
     color: var(--text-dim);
     font-size: 0.85rem;
     text-align: center;
-    padding: 60px 0;
+    padding: 70px 0;
 }
 
 /* ─── Market Section ─── */
@@ -1303,6 +1358,8 @@ body {
     /* Chart */
     .home-chart { margin-top: 28px; }
     .chart-card { padding: 16px 14px 12px; }
+    .chart-header-row { flex-direction: column; gap: 10px; }
+    .chart-legend { justify-content: flex-start; }
     .chart-wrap { height: 200px; }
 
     /* Market */

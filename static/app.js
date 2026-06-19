@@ -70,23 +70,46 @@ function renderGenreChart(genres, trend) {
     genres.forEach(g => (trend[g] || []).forEach(p => dateSet.add(p.date)));
     const labels = [...dateSet].sort();
 
+    const subtitleEl = document.getElementById("chart-subtitle");
+
     if (labels.length === 0) {
         canvas.parentElement.innerHTML = `<p class="chart-empty">No trend data yet — run daily_snapshot.py to build history.</p>`;
+        if (subtitleEl) subtitleEl.textContent = "";
         return;
     }
 
+    if (subtitleEl) {
+        const totalPlayers = genres.reduce((sum, g) => {
+            const pts = trend[g] || [];
+            return sum + (pts.length ? pts[pts.length - 1].players : 0);
+        }, 0);
+        subtitleEl.textContent = `${formatNumber(totalPlayers)} players across ${genres.length} genres · ${labels.length} day${labels.length !== 1 ? "s" : ""} tracked`;
+    }
+
+    const ctx = canvas.getContext("2d");
+
     const datasets = genres.map(genre => {
         const byDate = Object.fromEntries((trend[genre] || []).map(p => [p.date, p.players]));
+        const color = GENRE_COLORS[genre];
+
+        const gradient = ctx.createLinearGradient(0, 0, 0, 280);
+        gradient.addColorStop(0, color + "30");
+        gradient.addColorStop(1, color + "00");
+
         return {
             label:            genre,
             data:             labels.map(d => byDate[d] ?? null),
-            borderColor:      GENRE_COLORS[genre],
-            backgroundColor:  GENRE_COLORS[genre] + "22",
-            borderWidth:      2,
-            pointRadius:      labels.length <= 7 ? 4 : 2,
-            pointHoverRadius: 6,
-            pointBackgroundColor: GENRE_COLORS[genre],
-            fill: false, tension: 0.4, spanGaps: true
+            borderColor:      color,
+            backgroundColor:  gradient,
+            borderWidth:      2.5,
+            pointRadius:      0,
+            pointHoverRadius: 5,
+            pointHoverBackgroundColor: color,
+            pointHoverBorderColor: "#fff",
+            pointHoverBorderWidth: 2,
+            fill: true,
+            tension: 0.4,
+            spanGaps: true
         };
     });
 
@@ -98,20 +121,68 @@ function renderGenreChart(genres, trend) {
             maintainAspectRatio: false,
             interaction: { mode: "index", intersect: false },
             plugins: {
-                legend: {
-                    position: "bottom",
-                    labels: { color: "#6b6b90", boxWidth: 10, boxHeight: 10, borderRadius: 2, useBorderRadius: true, padding: 14, font: { size: 11 } }
-                },
+                legend: { display: false },
                 tooltip: {
-                    backgroundColor: "#1D2735", borderColor: "#263042", borderWidth: 1, padding: 12,
-                    callbacks: { label: ctx => ` ${ctx.dataset.label}: ${formatNumber(ctx.parsed.y)} players` }
+                    backgroundColor: "rgba(10, 14, 19, 0.95)",
+                    borderColor: "rgba(23, 129, 255, 0.2)",
+                    borderWidth: 1,
+                    padding: { top: 10, bottom: 10, left: 14, right: 14 },
+                    cornerRadius: 10,
+                    titleFont: { family: "'RNS Sans', sans-serif", size: 12, weight: "600" },
+                    titleColor: "#E7EFF7",
+                    bodyFont: { family: "'RNS Sans', sans-serif", size: 11 },
+                    bodyColor: "#7a8da3",
+                    bodySpacing: 4,
+                    boxWidth: 8,
+                    boxHeight: 8,
+                    boxPadding: 4,
+                    usePointStyle: true,
+                    pointStyle: "circle",
+                    callbacks: {
+                        title: items => items[0]?.label || "",
+                        label: ctx => `  ${ctx.dataset.label}   ${formatNumber(ctx.parsed.y)} players`
+                    }
                 }
             },
             scales: {
-                x: { ticks: { color: "#6b6b90", font: { size: 11 } }, grid: { color: "rgba(255,255,255,0.04)" } },
-                y: { ticks: { color: "#6b6b90", font: { size: 11 }, callback: v => formatNumber(v) }, grid: { color: "rgba(255,255,255,0.04)" } }
+                x: {
+                    border: { display: false },
+                    ticks: { color: "#3a506e", font: { family: "'RNS Sans', sans-serif", size: 10 }, maxRotation: 0 },
+                    grid: { display: false }
+                },
+                y: {
+                    border: { display: false },
+                    ticks: {
+                        color: "#3a506e",
+                        font: { family: "'RNS Sans', sans-serif", size: 10 },
+                        callback: v => formatNumber(v),
+                        maxTicksLimit: 5
+                    },
+                    grid: { color: "rgba(255,255,255,0.03)", drawTicks: false }
+                }
             }
         }
+    });
+
+    buildChartLegend(genres, datasets);
+}
+
+function buildChartLegend(genres, datasets) {
+    const container = document.getElementById("chart-legend");
+    if (!container) return;
+    container.innerHTML = "";
+
+    genres.forEach((genre, i) => {
+        const item = document.createElement("button");
+        item.className = "chart-legend-item";
+        item.innerHTML = `<span class="chart-legend-dot" style="background:${GENRE_COLORS[genre]}"></span>${genre}`;
+        item.addEventListener("click", () => {
+            const meta = genreChart.getDatasetMeta(i);
+            meta.hidden = !meta.hidden;
+            item.classList.toggle("dimmed", meta.hidden);
+            genreChart.update();
+        });
+        container.appendChild(item);
     });
 }
 
