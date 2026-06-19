@@ -32,13 +32,45 @@ PROGRESS_FILE = os.path.join(os.path.dirname(__file__), ".expand_progress")
 
 
 def get_all_steam_apps():
-    print("Fetching full Steam app list...")
-    r = requests.get("https://api.steampowered.com/ISteamApps/GetAppList/v2/", timeout=30)
-    if r.status_code != 200:
-        print(f"Failed: {r.status_code}")
+    """Fetch full Steam app list using IStoreService (paginated, requires API key)."""
+    api_key = os.getenv("STEAM_API_KEY")
+    if not api_key:
+        print("ERROR: STEAM_API_KEY not set in .env")
         return []
-    apps = r.json().get("applist", {}).get("apps", [])
-    print(f"Steam has {len(apps):,} apps total.")
+
+    print("Fetching full Steam app list (paginated)...")
+    apps = []
+    last_appid = 0
+    page = 0
+
+    while True:
+        try:
+            r = requests.get("https://api.steampowered.com/IStoreService/GetAppList/v1/", params={
+                "key": api_key,
+                "max_results": 50000,
+                "last_appid": last_appid
+            }, timeout=30)
+
+            if r.status_code != 200:
+                print(f"  Failed on page {page}: {r.status_code}")
+                break
+
+            data = r.json().get("response", {})
+            batch = data.get("apps", [])
+            apps.extend(batch)
+            page += 1
+
+            if not data.get("have_more_results"):
+                break
+
+            last_appid = data.get("last_appid", 0)
+            time.sleep(1)
+
+        except Exception as e:
+            print(f"  Error fetching app list: {e}")
+            break
+
+    print(f"Steam has {len(apps):,} apps total ({page} pages).")
     return apps
 
 

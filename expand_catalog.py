@@ -28,13 +28,32 @@ expansion_log = db["expansion_log"]
 
 
 def get_all_steam_apps():
-    """Fetch the full list of Steam app IDs."""
-    print("Fetching full Steam app list...")
-    r = requests.get("https://api.steampowered.com/ISteamApps/GetAppList/v2/", timeout=30)
-    if r.status_code != 200:
-        print(f"Failed to fetch app list: {r.status_code}")
+    """Fetch the full list of Steam app IDs via IStoreService (paginated)."""
+    api_key = os.getenv("STEAM_API_KEY")
+    if not api_key:
+        print("ERROR: STEAM_API_KEY not set in .env")
         return []
-    apps = r.json().get("applist", {}).get("apps", [])
+
+    print("Fetching full Steam app list...")
+    apps = []
+    last_appid = 0
+
+    while True:
+        try:
+            r = requests.get("https://api.steampowered.com/IStoreService/GetAppList/v1/", params={
+                "key": api_key, "max_results": 50000, "last_appid": last_appid
+            }, timeout=30)
+            if r.status_code != 200:
+                break
+            data = r.json().get("response", {})
+            apps.extend(data.get("apps", []))
+            if not data.get("have_more_results"):
+                break
+            last_appid = data.get("last_appid", 0)
+            time.sleep(1)
+        except Exception:
+            break
+
     print(f"Found {len(apps):,} apps on Steam.")
     return apps
 
