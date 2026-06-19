@@ -155,6 +155,13 @@ body {
     letter-spacing: -0.2px;
 }
 
+.brand-sub {
+    font-family: var(--font-body);
+    font-weight: 400;
+    color: var(--text-muted);
+    margin-left: 2px;
+}
+
 .topbar-right #chat-toggle {
     display: flex;
     align-items: center;
