@@ -170,6 +170,7 @@ def run():
 
         if result == "added":
             added += 1
+            print(f"  + {app_name}")
         elif result == "not_game":
             not_game += 1
         elif result == "no_data" or result == "parse_failed":
