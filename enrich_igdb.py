@@ -99,7 +99,7 @@ def enrich(limit=2000, all_games=False):
 
         # Search IGDB by Steam app ID via external games
         results = igdb_query("external_games",
-            f'fields game; where uid = "{aid}" & category = 1; limit 1;',
+            f'fields game; where uid = "{aid}"; limit 1;',
             token
         )
 
