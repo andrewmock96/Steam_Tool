@@ -193,7 +193,14 @@ def parse_game(steam_data, spy_data):
 
     initial_price = price["initial"]
     current_price = price["current"]
-    avg_price = (initial_price + current_price) / 2 if initial_price > 0 else current_price
+    # Use historical low from ITAD if available (set by enrich_pricing.py)
+    hist_low = spy_data.get("_price_history_low")
+    if hist_low is not None and initial_price > 0:
+        avg_price = (initial_price * 0.35) + (current_price * 0.35) + (hist_low * 0.30)
+    elif initial_price > 0:
+        avg_price = (initial_price + current_price) / 2
+    else:
+        avg_price = current_price
     if avg_price == 0:
         avg_price = current_price
 

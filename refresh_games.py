@@ -50,7 +50,7 @@ def refresh(limit=2000, all_games=False):
 
         try:
             steam_data = get_steam_game_details(aid)
-            spy_data = get_steamspy_details(aid)
+            spy_data = get_steamspy_details(aid) or {}
 
             if not steam_data:
                 skipped += 1
@@ -59,7 +59,12 @@ def refresh(limit=2000, all_games=False):
                 time.sleep(1.5)
                 continue
 
-            parsed = parse_game(steam_data, spy_data or {})
+            # Pass ITAD historical low into spy_data so parse_game can use it
+            existing = games_col.find_one({"steam_app_id": aid}, {"price_history": 1, "_id": 0})
+            if existing and existing.get("price_history", {}).get("steam_historical_low"):
+                spy_data["_price_history_low"] = existing["price_history"]["steam_historical_low"]
+
+            parsed = parse_game(steam_data, spy_data)
             if not parsed:
                 skipped += 1
                 time.sleep(1.5)
