@@ -581,6 +581,9 @@ body {
     cursor: pointer;
     transition: opacity var(--ease);
     padding: 2px 0;
+    background: none;
+    border: none;
+    font-family: inherit;
 }
 
 .chart-legend-item:hover { opacity: 0.7; }
