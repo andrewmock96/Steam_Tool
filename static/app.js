@@ -646,7 +646,7 @@ function buildCard(game) {
     card.addEventListener("click", () => openDetail(game.steam_app_id));
     card.addEventListener("dblclick", (e) => {
         e.preventDefault();
-        window.open(`https://store.steampowered.com/app/${game.steam_app_id}`, "_blank");
+        window.open(`steam://store/${game.steam_app_id}`);
     });
     return card;
 }
@@ -671,7 +671,7 @@ async function openDetail(appId) {
         <img class="detail-image" src="${game.header_image_url || ''}" alt="${game.title}">
         <div class="detail-title-row">
             <h2 class="detail-title">${game.title}</h2>
-            <a href="https://store.steampowered.com/app/${game.steam_app_id}" target="_blank" rel="noopener" class="steam-link">
+            <a href="steam://store/${game.steam_app_id}" class="steam-link">
                 View on Steam
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M4 1h7v7M11 1L5 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </a>
