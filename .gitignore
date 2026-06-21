@@ -3,3 +3,11 @@ __pycache__/
 *.pyc
 .claude/
 QUESTIONS_FOR_BOSS.md
+Branding/
+
+# Local-only scripts (not needed on Render)
+expand_continuous.py
+refresh_players.py
+refresh_games.py
+daily_snapshot.py
+pipeline.py
