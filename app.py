@@ -115,14 +115,27 @@ def _parse_filters(args):
     return filters
 
 
+_count_cache = {}
+_count_cache_time = {}
+MAX_SKIP = 5000
+
+def _cached_count(match_query):
+    """Cache document counts for 5 minutes to avoid repeated full scans."""
+    import time as _time
+    key = str(sorted(match_query.items()))
+    now = _time.time()
+    if key in _count_cache and now - _count_cache_time.get(key, 0) < 300:
+        return _count_cache[key]
+    count = games_col.count_documents(match_query)
+    _count_cache[key] = count
+    _count_cache_time[key] = now
+    return count
+
+
 def _sorted_games_pipeline(match_query, page, limit, sort_by="revenue"):
     """
-    Aggregation pipeline with configurable sort:
-    - revenue (default): composite score (estimated_revenue.low for paid, reviews×150 for F2P)
-    - reviews: total_reviews desc
-    - score: positive_percent desc
-    - newest: release_date desc
-    - price_low / price_high: price.current asc/desc
+    Aggregation pipeline with configurable sort.
+    Caps skip depth to avoid slow queries on deep pages.
     """
     revenue_sort = {"$addFields": {"_sort_score": {"$cond": {
         "if":   {"$gt": [{"$ifNull": ["$estimated_revenue.low", 0]}, 0]},
@@ -141,18 +154,22 @@ def _sorted_games_pipeline(match_query, page, limit, sort_by="revenue"):
 
     add_fields, sort_spec = sort_map.get(sort_by, sort_map["revenue"])
 
+    skip = page * limit
+    if skip > MAX_SKIP:
+        skip = MAX_SKIP
+
     pipeline = [{"$match": match_query}]
     if add_fields:
         pipeline.append(add_fields)
     pipeline += [
         {"$sort": sort_spec},
-        {"$skip": page * limit},
+        {"$skip": skip},
         {"$limit": limit},
         {"$project": {"_sort_score": 0, "_id": 0}}
     ]
 
-    results = list(games_col.aggregate(pipeline))
-    total   = games_col.count_documents(match_query)
+    results = list(games_col.aggregate(pipeline, allowDiskUse=True))
+    total   = _cached_count(match_query)
     return results, total
 
 

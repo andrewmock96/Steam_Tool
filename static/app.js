@@ -419,11 +419,12 @@ function renderGrid(games) {
 
 function renderPagination() {
     const el    = document.getElementById("pagination");
-    const pages = totalPages();
+    const maxPage = Math.floor(5000 / activeLimit);
+    const pages = Math.min(totalPages(), maxPage + 1);
     if (pages <= 1) { el.innerHTML = ""; return; }
 
     const p = currentPage;
-    const nums = new Set([0, pages - 1, p, p - 1, p + 1].filter(n => n >= 0 && n < pages));
+    const nums = new Set([0, pages - 1, p, p - 1, p + 1, p + 2].filter(n => n >= 0 && n < pages));
     const sorted = [...nums].sort((a, b) => a - b);
 
     let html = `<button class="page-btn" data-page="${p - 1}" ${p === 0 ? "disabled" : ""}>‹ Prev</button>`;
