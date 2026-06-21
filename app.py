@@ -117,7 +117,7 @@ def _parse_filters(args):
 
 _count_cache = {}
 _count_cache_time = {}
-MAX_SKIP = 5000
+
 
 def _cached_count(match_query):
     """Cache document counts for 5 minutes to avoid repeated full scans."""
@@ -135,37 +135,26 @@ def _cached_count(match_query):
 def _sorted_games_pipeline(match_query, page, limit, sort_by="revenue"):
     """
     Aggregation pipeline with configurable sort.
-    Caps skip depth to avoid slow queries on deep pages.
+    Uses estimated_revenue.low directly for revenue sort (indexed)
+    instead of a computed field, for better performance on deep pages.
     """
-    revenue_sort = {"$addFields": {"_sort_score": {"$cond": {
-        "if":   {"$gt": [{"$ifNull": ["$estimated_revenue.low", 0]}, 0]},
-        "then": "$estimated_revenue.low",
-        "else": {"$multiply": [{"$ifNull": ["$review_summary.total_reviews", 0]}, 150]}
-    }}}}
-
     sort_map = {
-        "revenue":    (revenue_sort, {"_sort_score": -1}),
-        "reviews":    (None, {"review_summary.total_reviews": -1}),
-        "score":      (None, {"review_summary.positive_percent": -1}),
-        "newest":     (None, {"release_date": -1}),
-        "price_low":  (None, {"price.current": 1}),
-        "price_high": (None, {"price.current": -1}),
+        "revenue":    {"estimated_revenue.low": -1},
+        "reviews":    {"review_summary.total_reviews": -1},
+        "score":      {"review_summary.positive_percent": -1},
+        "newest":     {"release_date": -1},
+        "price_low":  {"price.current": 1},
+        "price_high": {"price.current": -1},
     }
 
-    add_fields, sort_spec = sort_map.get(sort_by, sort_map["revenue"])
+    sort_spec = sort_map.get(sort_by, sort_map["revenue"])
 
-    skip = page * limit
-    if skip > MAX_SKIP:
-        skip = MAX_SKIP
-
-    pipeline = [{"$match": match_query}]
-    if add_fields:
-        pipeline.append(add_fields)
-    pipeline += [
+    pipeline = [
+        {"$match": match_query},
         {"$sort": sort_spec},
-        {"$skip": skip},
+        {"$skip": page * limit},
         {"$limit": limit},
-        {"$project": {"_sort_score": 0, "_id": 0}}
+        {"$project": {"_id": 0}}
     ]
 
     results = list(games_col.aggregate(pipeline, allowDiskUse=True))

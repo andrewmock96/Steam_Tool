@@ -419,8 +419,7 @@ function renderGrid(games) {
 
 function renderPagination() {
     const el    = document.getElementById("pagination");
-    const maxPage = Math.floor(5000 / activeLimit);
-    const pages = Math.min(totalPages(), maxPage + 1);
+    const pages = totalPages();
     if (pages <= 1) { el.innerHTML = ""; return; }
 
     const p = currentPage;
