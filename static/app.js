@@ -644,6 +644,10 @@ function buildCard(game) {
         </div>
     `;
     card.addEventListener("click", () => openDetail(game.steam_app_id));
+    card.addEventListener("dblclick", (e) => {
+        e.preventDefault();
+        window.open(`https://store.steampowered.com/app/${game.steam_app_id}`, "_blank");
+    });
     return card;
 }
 
@@ -665,7 +669,13 @@ async function openDetail(appId) {
 
     document.getElementById("detail-content").innerHTML = `
         <img class="detail-image" src="${game.header_image_url || ''}" alt="${game.title}">
-        <h2 class="detail-title">${game.title}</h2>
+        <div class="detail-title-row">
+            <h2 class="detail-title">${game.title}</h2>
+            <a href="https://store.steampowered.com/app/${game.steam_app_id}" target="_blank" rel="noopener" class="steam-link">
+                View on Steam
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M4 1h7v7M11 1L5 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </a>
+        </div>
         <p class="detail-developer">${(game.developer || []).join(", ")} · Released ${game.release_date || "Unknown"}</p>
         <p class="detail-description">${game.description || "No description available."}</p>
 
