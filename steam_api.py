@@ -222,7 +222,8 @@ def parse_game(steam_data, spy_data):
 
     # --- Genres, tags, platforms ---
     genres = [g["description"] for g in steam_data.get("genres", [])]
-    tags   = list(spy_data.get("tags", {}).keys())
+    raw_tags = spy_data.get("tags", {})
+    tags = list(raw_tags.keys()) if isinstance(raw_tags, dict) else list(raw_tags) if isinstance(raw_tags, list) else []
     platforms_raw = steam_data.get("platforms", {})
     platforms = {
         "windows": platforms_raw.get("windows", False),
