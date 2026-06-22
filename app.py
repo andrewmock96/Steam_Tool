@@ -42,7 +42,9 @@ def search_games():
 
     results = list(games_col.find(
         {"title": {"$regex": query, "$options": "i"}},
-        {"_id": 0}
+        {"_id": 0, "steam_app_id": 1, "title": 1, "genres": 1, "tags": 1,
+         "price": 1, "is_free": 1, "review_summary": 1, "estimated_revenue": 1,
+         "header_image_url": 1}
     ).limit(20))
 
     if not results:
@@ -132,11 +134,24 @@ def _cached_count(match_query):
     return count
 
 
+CARD_FIELDS = {
+    "_id": 0,
+    "steam_app_id": 1,
+    "title": 1,
+    "genres": 1,
+    "tags": {"$slice": ["$tags", 3]},
+    "price": 1,
+    "is_free": 1,
+    "review_summary": 1,
+    "estimated_revenue": 1,
+    "header_image_url": 1,
+}
+
+
 def _sorted_games_pipeline(match_query, page, limit, sort_by="revenue"):
     """
     Aggregation pipeline with configurable sort.
-    Uses estimated_revenue.low directly for revenue sort (indexed)
-    instead of a computed field, for better performance on deep pages.
+    Returns only card-relevant fields for faster queries and smaller responses.
     """
     sort_map = {
         "revenue":    {"estimated_revenue.low": -1},
@@ -154,7 +169,7 @@ def _sorted_games_pipeline(match_query, page, limit, sort_by="revenue"):
         {"$sort": sort_spec},
         {"$skip": page * limit},
         {"$limit": limit},
-        {"$project": {"_id": 0}}
+        {"$project": CARD_FIELDS}
     ]
 
     results = list(games_col.aggregate(pipeline, allowDiskUse=True))
