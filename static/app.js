@@ -235,12 +235,55 @@ heroInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") sendHeroMessage();
 });
 
-document.querySelectorAll(".suggestion-chip").forEach(chip => {
-    chip.addEventListener("click", () => {
-        heroInput.value = chip.textContent.trim();
-        heroInput.focus();
-        sendHeroMessage();
-    });
+const SUGGESTIONS = [
+    "What genres make the most money on Steam?",
+    "How competitive is the roguelike market?",
+    "Best price point for an indie game?",
+    "What's the survival game opportunity?",
+    "How do city builders perform on Steam?",
+    "Is the FPS market oversaturated?",
+    "What review score do I need to succeed?",
+    "How many wishlists do I need for launch?",
+    "What's the average revenue for an indie RPG?",
+    "Are horror games profitable on Steam?",
+    "How does early access affect sales?",
+    "What tags drive the most discoverability?",
+    "Is the cozy game market growing?",
+    "What's the metroidvania market look like?",
+    "How do free-to-play games make money on Steam?",
+    "What's the best genre for a solo developer?",
+];
+
+const randomSuggestion = document.getElementById("random-suggestion");
+function setRandomSuggestion() {
+    randomSuggestion.textContent = SUGGESTIONS[Math.floor(Math.random() * SUGGESTIONS.length)];
+}
+setRandomSuggestion();
+
+randomSuggestion.addEventListener("click", () => {
+    heroInput.value = randomSuggestion.textContent;
+    heroInput.focus();
+    sendHeroMessage();
+    setRandomSuggestion();
+});
+
+// Home button
+document.getElementById("home-btn").addEventListener("click", (e) => {
+    e.preventDefault();
+    clearActiveGenre();
+    document.getElementById("overview-section").classList.remove("hidden");
+    document.getElementById("market-section").classList.add("hidden");
+    document.getElementById("results-header").classList.add("hidden");
+    document.getElementById("results-grid").innerHTML = "";
+    document.getElementById("pagination").innerHTML = "";
+    const toolbar = document.getElementById("results-toolbar");
+    if (toolbar) toolbar.remove();
+    const filterRow = document.getElementById("filter-row");
+    if (filterRow) filterRow.remove();
+    heroResponse.classList.add("hidden");
+    heroInput.value = "";
+    setRandomSuggestion();
+    document.querySelector(".main-content").scrollTo({ top: 0, behavior: "smooth" });
 });
 
 // ----------------------------

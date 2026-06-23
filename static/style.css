@@ -151,6 +151,16 @@ body {
     }
 }
 
+.brand-link {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+    transition: opacity var(--ease);
+}
+
+.brand-link:hover { opacity: 0.8; }
+
 .brand-logo {
     height: 26px;
     width: auto;
@@ -461,21 +471,15 @@ body {
 #hero-send:hover    { opacity: 0.88; box-shadow: 0 4px 20px rgba(23,129,255,0.4); }
 #hero-send:disabled { opacity: 0.35; cursor: not-allowed; }
 
-.hero-suggestions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    justify-content: center;
-    margin-top: 18px;
-}
-
 .suggestion-chip {
+    display: block;
+    margin: 16px auto 0;
     padding: 6px 15px;
     background: transparent;
     border: 1px solid var(--border);
     border-radius: 999px;
     color: var(--text-muted);
-    font-family: inherit;
+    font-family: var(--font-body);
     font-size: 0.8rem;
     cursor: pointer;
     transition: all var(--ease);
@@ -1383,7 +1387,6 @@ body {
         border-radius: 9px;
     }
 
-    .hero-suggestions { gap: 6px; }
     .suggestion-chip { font-size: 0.72rem; padding: 5px 11px; }
 
     .hero-response { padding: 16px; margin-top: 24px; }
