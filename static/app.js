@@ -268,6 +268,8 @@ document.getElementById("home-btn").addEventListener("click", (e) => {
     document.getElementById("results-header").classList.add("hidden");
     document.getElementById("results-grid").innerHTML = "";
     document.getElementById("pagination").innerHTML = "";
+    document.getElementById("no-results").classList.add("hidden");
+    document.getElementById("detail-panel").classList.add("hidden");
     const toolbar = document.getElementById("results-toolbar");
     if (toolbar) toolbar.remove();
     const filterRow = document.getElementById("filter-row");
