@@ -4,6 +4,7 @@ __pycache__/
 .claude/
 QUESTIONS_FOR_BOSS.md
 Branding/
+next_steps.txt
 
 # Local-only scripts (not needed on Render)
 expand_continuous.py
