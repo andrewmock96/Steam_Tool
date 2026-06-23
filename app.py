@@ -210,12 +210,17 @@ def export_genre_csv(genre):
                     headers={"Content-Disposition": f"attachment; filename={genre}_games.csv"})
 
 
+GENRE_EXCLUSIONS = {
+    "Sports": {"genres": {"$ne": "Racing"}},
+    "Racing": {"genres": {"$ne": "Sports"}},
+}
+
 @app.route("/api/games/genre/<genre>")
 def get_games_by_genre(genre):
     page    = max(0, int(request.args.get("page", 0)))
     limit   = min(150, max(1, int(request.args.get("limit", 50))))
     sort_by = request.args.get("sort", "revenue")
-    query   = {"genres": genre, "delisted": {"$ne": True}, **_parse_filters(request.args)}
+    query   = {"genres": genre, "delisted": {"$ne": True}, **_parse_filters(request.args), **GENRE_EXCLUSIONS.get(genre, {})}
     results, total = _sorted_games_pipeline(query, page, limit, sort_by)
     return jsonify({"games": results, "total": total, "page": page, "limit": limit})
 
