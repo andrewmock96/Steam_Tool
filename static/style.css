@@ -410,10 +410,7 @@ body {
     font-weight: 800;
     letter-spacing: -1px;
     line-height: 1.15;
-    background: linear-gradient(135deg, #ffffff 30%, #1781FF 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    color: #FFFFFF;
     margin-bottom: 12px;
 }
 
