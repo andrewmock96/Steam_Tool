@@ -254,18 +254,10 @@ const SUGGESTIONS = [
     "What's the best genre for a solo developer?",
 ];
 
-const randomSuggestion = document.getElementById("random-suggestion");
 function setRandomSuggestion() {
-    randomSuggestion.textContent = SUGGESTIONS[Math.floor(Math.random() * SUGGESTIONS.length)];
+    heroInput.placeholder = SUGGESTIONS[Math.floor(Math.random() * SUGGESTIONS.length)];
 }
 setRandomSuggestion();
-
-randomSuggestion.addEventListener("click", () => {
-    heroInput.value = randomSuggestion.textContent;
-    heroInput.focus();
-    sendHeroMessage();
-    setRandomSuggestion();
-});
 
 // Home button
 document.getElementById("home-btn").addEventListener("click", (e) => {

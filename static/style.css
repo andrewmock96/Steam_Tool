@@ -472,17 +472,7 @@ body {
 #hero-send:disabled { opacity: 0.35; cursor: not-allowed; }
 
 .suggestion-chip {
-    display: block;
-    margin: 16px auto 0;
-    padding: 6px 15px;
-    background: transparent;
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    color: var(--text-muted);
-    font-family: var(--font-body);
-    font-size: 0.8rem;
-    cursor: pointer;
-    transition: all var(--ease);
+    display: none;
 }
 
 .suggestion-chip:hover {
