@@ -30,7 +30,7 @@ const SUBGENRES = {
     "Simulation": ["City Builder","Farming Sim","Life Sim","Management","Tycoon","Space Sim","Flight Sim","Train Sim","Colony Sim","Base Building","Sandbox","God Game","Driving","Cooking","Fishing","Automation","Factory","Hospital","Business","Naval","Trucking","Hunting","Survival","Physics"],
     "Strategy": ["Turn-Based Strategy","Real-Time Strategy","4X","Grand Strategy","Tower Defense","Card Game","Deckbuilding","Wargame","Auto Battler","Puzzle Strategy","City Builder","Resource Management","Economic","Space","Military","Political","Base Building","Roguelike","Naval","Survival","Management","Sandbox"],
     "Sports": ["Soccer","Basketball","Baseball","Golf","Tennis","Wrestling","Fishing","Skating","Cycling","Track and Field","Boxing","Snowboarding","Football","Hockey","Rugby","Cricket","Volleyball","Skateboarding","Surfing","BMX","Extreme Sports","Hunting","Archery"],
-    "Racing": ["Arcade Racing","Simulation Racing","Kart Racing","Off-Road","Motocross","Drag Racing","Street Racing","Rally","Open World","Bikes","Formula Racing"]
+    "Racing": ["Open World","Motorsport","Motocross","Cycling"]
 };
 
 // ----------------------------
@@ -189,41 +189,112 @@ function buildChartLegend(genres, datasets) {
 loadOverview();
 
 // ----------------------------
-// Home: AI Hero Search
+// Home: Insight Search
 // ----------------------------
 
 const heroInput    = document.getElementById("hero-input");
 const heroSend     = document.getElementById("hero-send");
 const heroResponse = document.getElementById("hero-response");
+const preferredAiTool = document.getElementById("preferred-ai-tool");
+const briefModeSelect = document.getElementById("brief-mode-select");
+const conceptInput = document.getElementById("concept-input");
+const conceptAnalyzeBtn = document.getElementById("concept-analyze");
+const conceptResults = document.getElementById("concept-results");
+const AI_TOOL_STORAGE_KEY = "goingIndie.preferredAiTool";
+const BRIEF_MODE_STORAGE_KEY = "goingIndie.briefMode";
+let activeCompareState = null;
+let latestConceptAnalysis = null;
+
+function readPreferredAiTool() {
+    try {
+        return localStorage.getItem(AI_TOOL_STORAGE_KEY);
+    } catch (err) {
+        return null;
+    }
+}
+
+function savePreferredAiTool(value) {
+    try {
+        localStorage.setItem(AI_TOOL_STORAGE_KEY, value);
+    } catch (err) {
+        console.warn("Could not save AI preference locally.", err);
+    }
+}
+
+function getPreferredAiTool() {
+    return readPreferredAiTool() || preferredAiTool?.value || "chatgpt";
+}
+
+function getPreferredAiLabel() {
+    const selected = preferredAiTool?.selectedOptions?.[0];
+    return selected?.textContent || "AI";
+}
+
+function readBriefMode() {
+    try {
+        return localStorage.getItem(BRIEF_MODE_STORAGE_KEY);
+    } catch (err) {
+        return null;
+    }
+}
+
+function saveBriefMode(value) {
+    try {
+        localStorage.setItem(BRIEF_MODE_STORAGE_KEY, value);
+    } catch (err) {
+        console.warn("Could not save brief mode locally.", err);
+    }
+}
+
+function getBriefMode() {
+    return readBriefMode() || briefModeSelect?.value || "general";
+}
+
+function syncPreferredAiTool() {
+    if (!preferredAiTool) return;
+    const saved = readPreferredAiTool();
+    if (saved && [...preferredAiTool.options].some(option => option.value === saved)) {
+        preferredAiTool.value = saved;
+    }
+}
+
+syncPreferredAiTool();
+if (briefModeSelect) {
+    const savedMode = readBriefMode();
+    if (savedMode && [...briefModeSelect.options].some(option => option.value === savedMode)) {
+        briefModeSelect.value = savedMode;
+    }
+}
+
+preferredAiTool?.addEventListener("change", () => {
+    savePreferredAiTool(preferredAiTool.value);
+});
+
+briefModeSelect?.addEventListener("change", () => {
+    saveBriefMode(briefModeSelect.value);
+});
 
 async function sendHeroMessage() {
-    const message = heroInput.value.trim();
+    const message = (isSuggestedQuestion ? currentSuggestedQuestion : heroInput.value).trim();
     if (!message) return;
 
+    acceptSuggestedQuestion();
+    heroInput.value = message;
     heroSend.disabled  = true;
     heroSend.textContent = "…";
-    heroResponse.innerHTML = `<div class="hero-loading"><div class="chat-typing"><span></span><span></span><span></span></div></div>`;
     heroResponse.classList.remove("hidden");
 
     try {
-        const res = await fetch("/api/chat", {
-            method:  "POST",
-            headers: { "Content-Type": "application/json" },
-            body:    JSON.stringify({ message })
-        });
-
-        if (!res.ok) {
-            const err = await res.json().catch(() => ({ error: "Request failed" }));
-            heroResponse.innerHTML = `<p style="color:var(--negative)">${escapeHtml(err.error || "Something went wrong.")}</p>`;
-        } else {
-            const data = await res.json();
-            heroResponse.innerHTML = `
-                <div class="hero-question">${escapeHtml(message)}</div>
-                <div class="hero-answer">${renderMarkdown(data.response || "No response.")}</div>
-            `;
-        }
+        const openedNewTab = copyChatGptBrief(message);
+        heroResponse.innerHTML = `
+            <div class="hero-question">${escapeHtml(message)}</div>
+            <div class="hero-answer">
+                <p>${openedNewTab ? "Opened a brief loader tab." : "Opening the brief loader here because the browser blocked the new tab."}</p>
+                <p>It will copy the Steam market brief first, then move that tab to ${escapeHtml(getPreferredAiLabel())}.</p>
+            </div>
+        `;
     } catch (err) {
-        heroResponse.innerHTML = `<p style="color:var(--negative)">Network error — is the server running?</p>`;
+        heroResponse.innerHTML = `<p style="color:var(--negative)">Could not open the AI brief loader.</p>`;
     } finally {
         heroSend.disabled = false;
         heroSend.textContent = "Ask AI";
@@ -236,28 +307,107 @@ heroInput.addEventListener("keydown", (e) => {
 });
 
 const SUGGESTIONS = [
-    "What genres make the most money on Steam?",
-    "How competitive is the roguelike market?",
-    "Best price point for an indie game?",
-    "What's the survival game opportunity?",
-    "How do city builders perform on Steam?",
-    "Is the FPS market oversaturated?",
-    "What review score do I need to succeed?",
-    "How many wishlists do I need for launch?",
-    "What's the average revenue for an indie RPG?",
-    "Are horror games profitable on Steam?",
-    "How does early access affect sales?",
-    "What tags drive the most discoverability?",
-    "Is the cozy game market growing?",
-    "What's the metroidvania market look like?",
-    "How do free-to-play games make money on Steam?",
-    "What's the best genre for a solo developer?",
+    "Ask AI which Steam genres look strongest right now",
+    "Ask AI which Steam markets feel underserved",
+    "Ask AI what genres are less prominent right now",
+    "Ask AI whether cozy games are still growing",
+    "Ask AI whether FPS is oversaturated",
+    "Ask AI how competitive roguelikes are",
+    "Ask AI about the metroidvania market",
+    "Ask AI how city builders perform on Steam",
+    "Ask AI about the survival game opportunity",
+    "Ask AI whether horror games are profitable",
+    "Ask AI what subgenres fit a solo developer best",
+    "Ask AI which tags attract the same audience as my game",
+    "Ask AI what audience usually buys games like this on Steam",
+    "Ask AI which player tags overlap most with cozy players",
+    "Ask AI how I should position my game for the right Steam audience",
+    "Ask AI what price range works best for indie strategy games",
+    "Ask AI for indie pricing advice",
+    "Ask AI what review score I should target",
+    "Ask AI how many wishlists I need before launch",
+    "Ask AI what a strong revenue outcome looks like in my market",
+    "Ask AI how crowded my genre is compared with similar subgenres",
+    "Ask AI whether I should focus on a niche tag or a broader genre",
+    "Ask AI which competitors I should study before launch",
+    "Ask AI what kind of market this concept would fit into",
+    "Ask AI whether my game sounds more premium or niche",
+    "Ask AI what risks stand out in this Steam market",
+    "Ask AI what opportunity signals matter most before Next Fest",
+    "Ask AI whether a demo is more important in this genre",
+    "Ask AI what tags are doing well with players right now",
+    "Ask AI about average indie RPG revenue",
 ];
 
-function setRandomSuggestion() {
-    heroInput.placeholder = SUGGESTIONS[Math.floor(Math.random() * SUGGESTIONS.length)];
+let suggestionTimer = null;
+let isSuggestedQuestion = false;
+let currentSuggestedQuestion = "";
+let suggestionQueue = [];
+
+function refillSuggestionQueue() {
+    suggestionQueue = [...SUGGESTIONS];
+
+    for (let i = suggestionQueue.length - 1; i > 0; i -= 1) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [suggestionQueue[i], suggestionQueue[j]] = [suggestionQueue[j], suggestionQueue[i]];
+    }
+
+    if (suggestionQueue.length > 1 && suggestionQueue[0] === currentSuggestedQuestion) {
+        [suggestionQueue[0], suggestionQueue[1]] = [suggestionQueue[1], suggestionQueue[0]];
+    }
 }
+
+function setRandomSuggestion() {
+    if (suggestionQueue.length === 0) refillSuggestionQueue();
+    startSuggestedQuestion(suggestionQueue.shift());
+}
+
+function startSuggestedQuestion(text) {
+    clearInterval(suggestionTimer);
+    heroInput.value = "";
+    heroInput.classList.add("suggested");
+    isSuggestedQuestion = true;
+    currentSuggestedQuestion = text;
+
+    let i = 0;
+    suggestionTimer = setInterval(() => {
+        if (!isSuggestedQuestion) {
+            clearInterval(suggestionTimer);
+            return;
+        }
+
+        heroInput.value = text.slice(0, i + 1);
+        i += 1;
+
+        if (i >= text.length) clearInterval(suggestionTimer);
+    }, 26);
+}
+
+function clearSuggestedQuestion() {
+    clearInterval(suggestionTimer);
+    if (isSuggestedQuestion) heroInput.value = "";
+    isSuggestedQuestion = false;
+    heroInput.classList.remove("suggested");
+}
+
+function acceptSuggestedQuestion() {
+    clearInterval(suggestionTimer);
+    isSuggestedQuestion = false;
+    heroInput.classList.remove("suggested");
+}
+
 setRandomSuggestion();
+
+heroInput.addEventListener("keydown", (e) => {
+    if (!isSuggestedQuestion) return;
+    if (e.key === "Enter") return;
+
+    const isTypingKey = e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey;
+    const isDeleteKey = e.key === "Backspace" || e.key === "Delete";
+    if (isTypingKey || isDeleteKey) clearSuggestedQuestion();
+});
+
+heroInput.addEventListener("paste", clearSuggestedQuestion);
 
 // Home button
 document.getElementById("home-btn").addEventListener("click", (e) => {
@@ -300,12 +450,18 @@ document.getElementById("search-input").addEventListener("keydown", (e) => {
 // ----------------------------
 
 let activeGenre = null;
+let activeBriefContext = {};
 
 function clearActiveGenre() {
     document.querySelectorAll(".genre-item").forEach(i => i.classList.remove("active"));
     const existing = document.querySelector(".subgenre-nav");
     if (existing) existing.remove();
     activeGenre = null;
+    activeBriefContext = {};
+    activeCompareState = null;
+    document.getElementById("compare-results")?.classList.add("hidden");
+    document.getElementById("market-explainer")?.classList.add("hidden");
+    renderFollowUpPrompts([]);
 }
 
 document.querySelectorAll(".genre-item").forEach(item => {
@@ -347,28 +503,278 @@ function loadSubgenres(genre, afterElement) {
             nav.innerHTML = "";
             if (available.length === 0) { nav.remove(); return; }
 
-            available.forEach(({ tag, count }) => {
+            const childTags = new Set(
+                available.flatMap(item => item.children || [])
+            );
+            const topLevel = available.filter(item => !childTags.has(item.tag));
+
+            const clearActiveSubgenres = () => {
+                document.querySelectorAll(".subgenre-nav-item, .subgenre-child-item").forEach(el => el.classList.remove("active"));
+            };
+
+            topLevel.forEach(({ tag, count, has_children }) => {
+                const group = document.createElement("div");
+                group.className = "subgenre-group";
+                group.dataset.parentTag = tag;
+
+                const row = document.createElement("div");
+                row.className = "subgenre-row";
+
                 const btn = document.createElement("button");
                 btn.className = "subgenre-nav-item";
                 btn.innerHTML = `<span class="subgenre-nav-name">${tag}</span><span class="subgenre-nav-count">${count}</span>`;
                 btn.addEventListener("click", (e) => {
                     e.stopPropagation();
-                    document.querySelectorAll(".subgenre-nav-item").forEach(p => p.classList.remove("active"));
+                    clearActiveSubgenres();
                     btn.classList.add("active");
                     fetchGames(`/api/games/tag/${encodeURIComponent(tag)}?genre=${encodeURIComponent(genre)}`, `${tag} Games`);
-                    fetchMarketOverview(tag, true, genre);
+                    fetchMarketOverview(tag, { level: "subgenre", parentGenre: genre, hasChildren: has_children });
+                    if (has_children) group.classList.add("expanded");
                 });
-                nav.appendChild(btn);
+                row.appendChild(btn);
+
+                let childrenWrap = null;
+                let toggle = null;
+                if (has_children) {
+                    toggle = document.createElement("button");
+                    toggle.type = "button";
+                    toggle.className = "subgenre-expand-btn";
+                    toggle.setAttribute("aria-label", `Show ${tag} child subgenres`);
+                    toggle.innerHTML = `<span class="subgenre-expand-icon">⌄</span>`;
+                    toggle.addEventListener("click", async (e) => {
+                        e.stopPropagation();
+                        if (!group.dataset.childrenLoaded) {
+                            await loadChildSubgenres(group, genre, tag);
+                        }
+                        if (group.dataset.childCount === "0") return;
+                        group.classList.toggle("expanded");
+                    });
+                    row.appendChild(toggle);
+
+                    childrenWrap = document.createElement("div");
+                    childrenWrap.className = "subgenre-children";
+                }
+
+                group.appendChild(row);
+                if (childrenWrap) group.appendChild(childrenWrap);
+                nav.appendChild(group);
+
+                if (has_children) {
+                    loadChildSubgenres(group, genre, tag, toggle);
+                }
             });
         });
+}
+
+async function loadChildSubgenres(group, genre, parentTag, toggleBtn = null) {
+    const toggle = toggleBtn || group.querySelector(".subgenre-expand-btn");
+    const wrap = group.querySelector(".subgenre-children");
+    if (!wrap || group.dataset.childrenLoaded) return;
+
+    wrap.innerHTML = `<span class="subgenre-loading">Loading…</span>`;
+
+    try {
+        const res = await fetch(`/api/insights/subgenre-children?genre=${encodeURIComponent(genre)}&subgenre=${encodeURIComponent(parentTag)}`);
+        if (!res.ok) throw new Error("Could not load child subgenres");
+        const data = await res.json();
+        const items = data.children_found || [];
+        group.dataset.childrenLoaded = "true";
+        group.dataset.childCount = String(items.length);
+        wrap.innerHTML = "";
+
+        if (!items.length) {
+            if (toggle) toggle.remove();
+            wrap.remove();
+            return;
+        }
+
+        items.forEach((item) => {
+            const childTag = item.market;
+            const childBtn = document.createElement("button");
+            childBtn.type = "button";
+            childBtn.className = "subgenre-child-item";
+            childBtn.innerHTML = `<span class="subgenre-child-name">${childTag}</span><span class="subgenre-nav-count">${item.total_games}</span>`;
+            childBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                document.querySelectorAll(".subgenre-nav-item, .subgenre-child-item").forEach(el => el.classList.remove("active"));
+                childBtn.classList.add("active");
+                group.classList.add("expanded");
+                fetchGames(`/api/games/tag/${encodeURIComponent(childTag)}?genre=${encodeURIComponent(genre)}`, `${childTag} Games`);
+                fetchMarketOverview(childTag, { level: "child", parentGenre: genre, parentTag });
+            });
+            wrap.appendChild(childBtn);
+        });
+    } catch (err) {
+        console.error("Child subgenre load failed:", err);
+        group.dataset.childrenLoaded = "true";
+        group.dataset.childCount = "0";
+        if (toggle) toggle.remove();
+        wrap.remove();
+    }
 }
 
 // ----------------------------
 // Market Overview
 // ----------------------------
 
-async function fetchMarketOverview(name, isSubgenre = false, parentGenre = null) {
+function marketDepthConfig(level, data, name, parentGenre = "", parentTag = "") {
+    const hasChildren = arguments[5] || false;
+    const sampleSize = data.sample_notes?.paid_revenue_sample_size || data.paid_games || 0;
+    const confidence = formatConfidence(data.confidence);
+    const captureLow = data.realistic_revenue_target?.conservative ?? data.SOM?.low;
+    const captureHigh = data.realistic_revenue_target?.expected ?? data.SOM?.high;
+    const strongOutcome = data.realistic_revenue_target?.strong;
+    const sharedStats = `
+        <div class="market-stats">
+            <span>${data.total_games} total games</span>
+            <span>${data.paid_games} paid</span>
+            <span>Avg ${formatMoney(data.avg_price)}</span>
+            <span>${data.avg_review_score}% positive</span>
+        </div>
+    `;
+
+    if (level === "genre") {
+        return {
+            title: `${name} Market`,
+            primaryLabel: "Total Addressable Market",
+            primaryValue: `${formatMoney(data.TAM.low)} - ${formatMoney(data.TAM.high)}`,
+            primaryDesc: `This is the broadest market size estimate for ${name} on Steam. Use this as the top-of-funnel ceiling before narrowing into a specific player segment.`,
+            context: `${name} is the full genre view, so this area shows TAM instead of narrower SAM/SOM figures.`,
+            cards: [
+                {
+                    label: "Games In Genre",
+                    value: `${data.total_games}`,
+                    desc: `${data.paid_games} paid games in sample`,
+                },
+                {
+                    label: "Confidence",
+                    value: confidence,
+                    desc: `Based on sample size, paid-game coverage, and concentration among top performers.`,
+                },
+            ],
+            sharedStats,
+        };
+    }
+
+    if (level === "child") {
+        return {
+            title: `${name} Market`,
+            primaryLabel: "Narrow Serviceable Market",
+            primaryValue: `${formatMoney(data.SAM.low)} - ${formatMoney(data.SAM.high)}`,
+            primaryDesc: `${name} is a more specific slice inside ${parentTag || parentGenre}. At this depth, the top market number shifts from TAM down to SAM so the estimate stays grounded in the reachable niche.`,
+            context: `${parentGenre} -> ${parentTag} -> ${name}`,
+            cards: [
+                {
+                    label: "Games In Niche",
+                    value: `${data.total_games}`,
+                    desc: `${data.paid_games} paid games in this narrower segment.`,
+                },
+                {
+                    label: "Realistic Capture",
+                    value: `${formatMoney(captureLow)} - ${formatMoney(captureHigh)}`,
+                    desc: `Grounded indie capture range inside this narrow segment.`,
+                },
+                {
+                    label: "Strong Outcome",
+                    value: `${formatMoney(strongOutcome)}`,
+                    desc: `75th percentile among comparable paid games in this segment.`,
+                },
+                {
+                    label: "Confidence",
+                    value: confidence,
+                    desc: `${sampleSize} paid comps after trimming top outliers.`,
+                },
+            ],
+            sharedStats,
+        };
+    }
+
+    return {
+        title: `${name} Market`,
+        primaryLabel: "Subgenre Addressable Market",
+        primaryValue: `${formatMoney(data.TAM.low)} - ${formatMoney(data.TAM.high)}`,
+        primaryDesc: `${name} is narrower than ${parentGenre}, so this top number is a smaller TAM for the subgenre before stepping down to SAM and SOM.`,
+        context: `${parentGenre} -> ${name}`,
+        cards: hasChildren
+            ? [
+                {
+                    label: "Games In Subgenre",
+                    value: `${data.total_games}`,
+                    desc: `${data.paid_games} paid games in this broader branch.`,
+                },
+                {
+                    label: "Confidence",
+                    value: confidence,
+                    desc: `${sampleSize} paid comps after outlier trimming.`,
+                },
+            ]
+            : [
+                {
+                    label: "Games In Subgenre",
+                    value: `${data.total_games}`,
+                    desc: `${data.paid_games} paid games in this subgenre.`,
+                },
+                {
+                    label: "Serviceable Market",
+                    value: `${formatMoney(data.SAM.low)} - ${formatMoney(data.SAM.high)}`,
+                    desc: `Reachable market for this specific subgenre on Steam.`,
+                },
+                {
+                    label: "Realistic Capture",
+                    value: `${formatMoney(captureLow)} - ${formatMoney(captureHigh)}`,
+                    desc: `More grounded capture range before the stronger upside case.`,
+                },
+                {
+                    label: "Confidence",
+                    value: confidence,
+                    desc: `${sampleSize} paid comps after outlier trimming.`,
+                },
+            ],
+        sharedStats,
+    };
+}
+
+function renderMarketSummary(data, context) {
+    const container = document.getElementById("market-grid");
+    if (!container || !data) return;
+    const config = marketDepthConfig(context.level, data, context.name, context.parentGenre, context.parentTag, context.hasChildren);
+
+    const secondaryCards = config.cards.map(card => `
+        <div class="market-card">
+            <div class="market-label">${card.label}</div>
+            <div class="market-value">${card.value}</div>
+            <div class="market-desc">${card.desc}</div>
+        </div>
+    `).join("");
+
+    container.innerHTML = `
+        <div class="market-card market-card-primary">
+            <div class="market-card-topline">
+                <div class="market-label">${config.primaryLabel}</div>
+                <div class="market-context">${config.context}</div>
+            </div>
+            <div class="market-value">${config.primaryValue}</div>
+            <div class="market-desc">${config.primaryDesc}</div>
+            ${config.sharedStats}
+        </div>
+        ${secondaryCards}
+    `;
+}
+
+async function fetchMarketOverview(name, options = {}) {
+    const {
+        level = "genre",
+        parentGenre = null,
+        parentTag = null,
+        hasChildren = false,
+    } = options;
     try {
+        activeCompareState = null;
+        const isSubgenre = level !== "genre";
+        activeBriefContext = isSubgenre
+            ? { genre: parentGenre || "", tag: name }
+            : { genre: name, tag: "" };
+
         let url = isSubgenre
             ? `/api/market/tag/${encodeURIComponent(name)}${parentGenre ? `?genre=${encodeURIComponent(parentGenre)}` : ""}`
             : `/api/market/genre/${encodeURIComponent(name)}`;
@@ -379,39 +785,242 @@ async function fetchMarketOverview(name, isSubgenre = false, parentGenre = null)
 
         document.getElementById("market-title").textContent = `${name} Market`;
         document.getElementById("market-section").classList.remove("hidden");
-
-        document.getElementById("market-grid").innerHTML = isSubgenre ? `
-            <div class="market-card">
-                <div class="market-label">Games in Subgenre</div>
-                <div class="market-value">${data.total_games}</div>
-                <div class="market-desc">${data.paid_games} paid · Avg $${data.avg_price} · ${data.avg_review_score}% positive</div>
-            </div>
-            <div class="market-card">
-                <div class="market-label">Serviceable Market</div>
-                <div class="market-value">${formatMoney(data.SAM.low)} – ${formatMoney(data.SAM.high)}</div>
-                <div class="market-desc">${data.SAM.description}</div>
-            </div>
-            <div class="market-card highlight">
-                <div class="market-label">Your Realistic Capture</div>
-                <div class="market-value">${formatMoney(data.SOM.low)} – ${formatMoney(data.SOM.high)}</div>
-                <div class="market-desc">${data.SOM.description}</div>
-            </div>
-        ` : `
-            <div class="market-card">
-                <div class="market-label">Games in Genre</div>
-                <div class="market-value">${data.total_games}</div>
-                <div class="market-desc">${data.paid_games} paid · Avg $${data.avg_price} · ${data.avg_review_score}% positive</div>
-            </div>
-            <div class="market-card highlight">
-                <div class="market-label">Total Addressable Market</div>
-                <div class="market-value">${formatMoney(data.TAM.low)} – ${formatMoney(data.TAM.high)}</div>
-                <div class="market-desc">${data.TAM.description}</div>
-            </div>
-        `;
+        renderMarketSummary(data, { level, name, parentGenre, parentTag, hasChildren });
+        renderMarketExplainer(null);
+        loadFollowUpPrompts();
     } catch (err) {
         console.error("Market fetch failed:", err);
     }
 }
+
+// ----------------------------
+// AI Handoff
+// ----------------------------
+
+function copyChatGptBrief(userQuestion = "") {
+    const params = new URLSearchParams();
+    if (activeBriefContext.genre) params.set("genre", activeBriefContext.genre);
+    if (activeBriefContext.tag) params.set("tag", activeBriefContext.tag);
+    if (userQuestion) params.set("q", userQuestion);
+    params.set("mode", getBriefMode());
+    if (activeCompareState?.right) {
+        params.set("compare_type", activeCompareState.right.type);
+        params.set("compare_value", activeCompareState.right.value);
+        if (activeCompareState.right.genre) params.set("compare_genre", activeCompareState.right.genre);
+    }
+    if (latestConceptAnalysis?.description) params.set("concept", latestConceptAnalysis.description);
+    params.set("ai_tool", getPreferredAiTool());
+
+    const url = `/chatgpt-brief-loader${params.toString() ? "?" + params.toString() : ""}`;
+    const tab = window.open(url, "_blank");
+    flashBriefButtons("Opening");
+
+    if (tab) {
+        tab.opener = null;
+        return true;
+    }
+
+    window.location.href = url;
+    return false;
+}
+
+async function writeClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+        try {
+            await navigator.clipboard.writeText(text);
+            return;
+        } catch (err) {
+            console.warn("navigator.clipboard failed; trying textarea fallback.", err);
+        }
+    }
+
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    ta.style.top = "0";
+    ta.setAttribute("readonly", "");
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    ta.setSelectionRange(0, ta.value.length);
+    const copied = document.execCommand("copy");
+    ta.remove();
+    if (!copied) throw new Error("Clipboard copy was blocked by the browser.");
+}
+
+function flashBriefButtons(label) {
+    const buttons = [
+        document.getElementById("copy-chatgpt-brief"),
+        document.getElementById("chat-copy-brief")
+    ].filter(Boolean);
+
+    buttons.forEach(btn => {
+        const original = btn.dataset.originalLabel || btn.textContent;
+        btn.dataset.originalLabel = original;
+        btn.textContent = label;
+        btn.disabled = true;
+        setTimeout(() => {
+            btn.textContent = original;
+            btn.disabled = false;
+        }, 1500);
+    });
+}
+
+document.getElementById("copy-chatgpt-brief")?.addEventListener("click", () => copyChatGptBrief());
+document.getElementById("chat-copy-brief")?.addEventListener("click", () => copyChatGptBrief());
+
+function renderFollowUpPrompts(prompts = []) {
+    const container = document.getElementById("follow-up-prompts");
+    if (!container) return;
+    container.innerHTML = "";
+    prompts.forEach(prompt => {
+        const btn = document.createElement("button");
+        btn.className = "follow-up-chip";
+        btn.type = "button";
+        btn.textContent = prompt;
+        btn.addEventListener("click", () => {
+            heroInput.value = prompt;
+            clearSuggestedQuestion();
+            sendHeroMessage();
+        });
+        container.appendChild(btn);
+    });
+}
+
+function renderMarketExplainer(data) {
+    const container = document.getElementById("market-explainer");
+    if (!container) return;
+    container.classList.add("hidden");
+    container.innerHTML = "";
+}
+
+async function loadFollowUpPrompts(question = "") {
+    if (!activeBriefContext.genre && !activeBriefContext.tag) return;
+    const params = new URLSearchParams();
+    if (activeBriefContext.genre) params.set("genre", activeBriefContext.genre);
+    if (activeBriefContext.tag) params.set("tag", activeBriefContext.tag);
+    if (question) params.set("q", question);
+    try {
+        const res = await fetch(`/api/insights/follow-ups?${params.toString()}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        renderFollowUpPrompts(data.prompts || []);
+    } catch (err) {
+        console.error("Follow-up prompt load failed:", err);
+    }
+}
+
+function renderCompareResults(data) {
+    const container = document.getElementById("compare-results");
+    if (!container) return;
+    container.classList.remove("hidden");
+    container.innerHTML = `
+        <div class="compare-grid">
+            <div class="insight-card">
+                <h4>${data.left.market}</h4>
+                <p>${data.left.total_games} games · ${formatMoney(data.left.estimated_revenue_high)} est. market · ${data.left.avg_review_score_pct}% avg positive</p>
+            </div>
+            <div class="insight-card">
+                <h4>${data.right.market}</h4>
+                <p>${data.right.total_games} games · ${formatMoney(data.right.estimated_revenue_high)} est. market · ${data.right.avg_review_score_pct}% avg positive</p>
+            </div>
+            <div class="insight-card">
+                <h4>Difference</h4>
+                <p>Revenue: ${formatPct(data.delta.estimated_revenue_high_pct)} · Games: ${formatPct(data.delta.total_games_pct)} · Review score: ${signedNumber(data.delta.avg_review_score_pct)} pts</p>
+            </div>
+        </div>
+    `;
+    renderFollowUpPrompts(data.follow_up_prompts || []);
+}
+
+async function runCompare() {
+    const type = document.getElementById("compare-type")?.value || "genre";
+    const value = document.getElementById("compare-value")?.value.trim();
+    if (!value || (!activeBriefContext.genre && !activeBriefContext.tag)) return;
+
+    const params = new URLSearchParams();
+    params.set("left_type", activeBriefContext.tag ? "tag" : "genre");
+    params.set("left", activeBriefContext.tag || activeBriefContext.genre);
+    if (activeBriefContext.tag && activeBriefContext.genre) params.set("left_genre", activeBriefContext.genre);
+    params.set("right_type", type);
+    params.set("right", value);
+    if (type === "tag" && activeBriefContext.genre) params.set("right_genre", activeBriefContext.genre);
+
+    const res = await fetch(`/api/insights/compare?${params.toString()}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    activeCompareState = {
+        left: {
+            type: activeBriefContext.tag ? "tag" : "genre",
+            value: activeBriefContext.tag || activeBriefContext.genre,
+            genre: activeBriefContext.genre || "",
+        },
+        right: {
+            type,
+            value,
+            genre: type === "tag" ? (activeBriefContext.genre || "") : "",
+        },
+    };
+    renderCompareResults(data);
+}
+
+function renderConceptResults(data) {
+    conceptResults.classList.remove("hidden");
+    latestConceptAnalysis = data;
+    const market = data.likely_market?.market || "No clear market match yet";
+    const confidence = data.likely_market?.confidence ? formatConfidence(data.likely_market.confidence) : "exploratory";
+    const opportunities = (data.opportunities || []).slice(0, 3).map(item => `<li>${item.market}: ${item.signal}</li>`).join("");
+    const followUps = (data.follow_up_prompts || []).slice(0, 4).map(prompt => `<button class="follow-up-chip" type="button">${prompt}</button>`).join("");
+    conceptResults.innerHTML = `
+        <div class="concept-grid">
+            <div class="insight-card">
+                <h3>Likely Market</h3>
+                <p>${market}</p>
+                <p>${confidence} confidence${data.inferred_context?.genre ? ` · Genre: ${data.inferred_context.genre}` : ""}${data.inferred_context?.tag ? ` · Tag: ${data.inferred_context.tag}` : ""}</p>
+            </div>
+            <div class="insight-card">
+                <h3>Opportunity Read</h3>
+                <ul>${opportunities || "<li>Describe a bit more about genre, tone, or mechanics to tighten this up.</li>"}</ul>
+            </div>
+            <div class="insight-card">
+                <h3>What to Ask Next</h3>
+                <div class="follow-up-prompts">${followUps}</div>
+            </div>
+        </div>
+    `;
+    conceptResults.querySelectorAll(".follow-up-chip").forEach((btn) => {
+        btn.addEventListener("click", () => {
+            const prompt = btn.textContent;
+            heroInput.value = prompt;
+            clearSuggestedQuestion();
+            sendHeroMessage();
+        });
+    });
+}
+
+async function analyzeConcept() {
+    const description = conceptInput?.value.trim();
+    if (!description) return;
+    conceptAnalyzeBtn.disabled = true;
+    conceptAnalyzeBtn.textContent = "Analyzing...";
+    try {
+        const res = await fetch("/api/insights/concept", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ description }),
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        renderConceptResults(data);
+    } finally {
+        conceptAnalyzeBtn.disabled = false;
+        conceptAnalyzeBtn.textContent = "Analyze Concept";
+    }
+}
+
+conceptAnalyzeBtn?.addEventListener("click", analyzeConcept);
+document.getElementById("compare-run")?.addEventListener("click", runCompare);
 
 // ----------------------------
 // Fetch & Render Games
@@ -787,8 +1396,23 @@ function formatNumber(value) {
     return value.toString();
 }
 
+function formatConfidence(confidence) {
+    if (!confidence) return "estimate";
+    return confidence.label || `${confidence.score || ""}/100`;
+}
+
+function formatPct(value) {
+    if (value == null) return "N/A";
+    return `${value > 0 ? "+" : ""}${value}%`;
+}
+
+function signedNumber(value) {
+    if (value == null) return "N/A";
+    return `${value > 0 ? "+" : ""}${value}`;
+}
+
 // ----------------------------
-// AI Chat Widget
+// Insight Widget
 // ----------------------------
 
 const chatPanel  = document.getElementById("chat-panel");

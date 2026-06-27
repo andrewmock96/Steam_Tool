@@ -10,7 +10,7 @@
     <meta property="og:description" content="Research Steam game markets, analyze competitors, and estimate revenue for indie developers.">
     <meta property="og:type" content="website">
     <link rel="icon" href="/static/favicon.png" type="image/png">
-    <link rel="stylesheet" href="/static/style.css?v=26">
+    <link rel="stylesheet" href="/static/style.css?v=33">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
@@ -27,9 +27,25 @@
             </a>
         </div>
         <div class="topbar-right">
+            <label class="ai-tool-select">
+                <span>AI</span>
+                <select id="preferred-ai-tool">
+                    <option value="chatgpt">ChatGPT</option>
+                    <option value="claude">Claude</option>
+                    <option value="gemini">Gemini</option>
+                    <option value="perplexity">Perplexity</option>
+                    <option value="copilot">Microsoft Copilot</option>
+                    <option value="grok">Grok</option>
+                    <option value="poe">Poe</option>
+                    <option value="phind">Phind</option>
+                    <option value="lechat">Mistral Le Chat</option>
+                    <option value="you">You.com</option>
+                    <option value="deepseek">DeepSeek</option>
+                </select>
+            </label>
             <button id="chat-toggle">
                 <span>✦</span>
-                Ask AI
+                Insights
             </button>
         </div>
     </header>
@@ -80,12 +96,35 @@
                 <div class="hero-content">
                     <h1 class="hero-title">Your Indie Game Starts Here</h1>
                     <p class="hero-sub">Research genres, analyze competitors, estimate revenue, and plan your launch on Steam.</p>
+                    <div class="hero-controls">
+                        <label class="hero-select-wrap">
+                            <span>Brief Mode</span>
+                            <select id="brief-mode-select" class="hero-select">
+                                <option value="general">Market Deep Dive</option>
+                                <option value="quick">Quick Answer</option>
+                                <option value="competition">Competitor Analysis</option>
+                                <option value="pricing">Pricing and Launch</option>
+                            </select>
+                        </label>
+                    </div>
                     <div class="hero-input-wrap">
                         <input type="text" id="hero-input" placeholder="">
                         <button id="hero-send">Ask AI</button>
                     </div>
                 </div>
                 <div id="hero-response" class="hero-response hidden"></div>
+
+                <div class="concept-card">
+                    <div class="concept-card-header">
+                        <div>
+                            <div class="concept-card-title">Describe Your Game Concept</div>
+                            <div class="concept-card-subtitle">Get a likely market fit, audience direction, and follow-up questions before you brief an AI tool.</div>
+                        </div>
+                        <button id="concept-analyze" class="concept-btn" type="button">Analyze Concept</button>
+                    </div>
+                    <textarea id="concept-input" class="concept-input" placeholder="Example: A cozy shopkeeping game where you restore a haunted bookstore, build relationships with town characters, and uncover a mystery through short exploration runs."></textarea>
+                    <div id="concept-results" class="concept-results hidden"></div>
+                </div>
 
                 <!-- Genre Trend Chart -->
                 <div class="home-chart">
@@ -105,10 +144,32 @@
             <!-- Market Overview (appears when a genre is selected) -->
             <section id="market-section" class="market-section hidden">
                 <div class="market-header">
-                    <h2 id="market-title">Market Overview</h2>
-                    <span class="market-note">Steam PC estimates only</span>
+                    <div>
+                        <h2 id="market-title">Market Overview</h2>
+                        <span class="market-note">Steam PC estimates only</span>
+                    </div>
+                    <button id="copy-chatgpt-brief" class="chatgpt-brief-btn" type="button">Open AI Brief</button>
+                </div>
+                <div class="market-tools">
+                    <div class="market-tool-card compare-card">
+                        <div class="market-tool-title">Compare Markets</div>
+                        <div class="compare-controls">
+                            <select id="compare-type" class="toolbar-select">
+                                <option value="genre">Genre</option>
+                                <option value="tag">Subgenre / Tag</option>
+                            </select>
+                            <input id="compare-value" class="compare-input" type="text" placeholder="e.g. Cozy or Strategy" />
+                            <button id="compare-run" class="toolbar-btn apply-btn" type="button">Compare</button>
+                        </div>
+                        <div id="compare-results" class="compare-results hidden"></div>
+                    </div>
+                    <div class="market-tool-card followup-card">
+                        <div class="market-tool-title">Suggested Follow-Ups</div>
+                        <div id="follow-up-prompts" class="follow-up-prompts"></div>
+                    </div>
                 </div>
                 <div id="market-grid" class="market-grid"></div>
+                <div id="market-explainer" class="market-explainer hidden"></div>
             </section>
 
             <!-- Results -->
@@ -135,31 +196,37 @@
         </div>
     </div>
 
-    <!-- AI Chat Widget -->
+    <!-- Insight Widget -->
     <div id="chat-widget">
         <div id="chat-panel" class="hidden">
             <div class="chat-header">
                 <div class="chat-header-title">
                     <span>✦</span>
-                    Steam Market AI
+                    Steam Market Insights
                 </div>
                 <button id="chat-close">✕</button>
             </div>
             <div id="chat-messages">
                 <div class="chat-message assistant">
                     <div class="chat-bubble">
-                        Ask me anything about the Steam market — genre size, competitor analysis, revenue estimates, or how to launch your game.
+                        Ask for Steam market data: genre size, competitor analysis, revenue estimates, launch benchmarks, or opportunity signals.
+                    </div>
+                </div>
+                <div class="chat-message assistant">
+                    <div class="chat-bubble">
+                        For deeper AI reasoning, open a market and send a brief to your preferred AI tool.
                     </div>
                 </div>
             </div>
             <div class="chat-input-row">
+                <button id="chat-copy-brief" title="Open current market brief in your preferred AI tool">Brief</button>
                 <input type="text" id="chat-input" placeholder="e.g. What's the roguelike market like?" />
                 <button id="chat-send">Send</button>
             </div>
         </div>
     </div>
 
-    <script src="/static/app.js?v=25"></script>
+    <script src="/static/app.js?v=42"></script>
 
 </body>
 </html>
