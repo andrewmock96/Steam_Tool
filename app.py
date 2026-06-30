@@ -159,8 +159,11 @@ def analyze_concept(games_col, description):
 
 
 def build_compare_data(games_col, left_genre=None, left_tag=None, right_genre=None, right_tag=None):
-    left = summarize_market(games_col, genre=left_genre, tag=left_tag)
-    right = summarize_market(games_col, genre=right_genre, tag=right_tag)
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=2) as ex:
+        fl = ex.submit(summarize_market, games_col, left_genre, left_tag)
+        fr = ex.submit(summarize_market, games_col, right_genre, right_tag)
+        left, right = fl.result(), fr.result()
     if not left or not right:
         return None
 

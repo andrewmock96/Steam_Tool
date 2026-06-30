@@ -33,6 +33,64 @@ const SUBGENRES = {
     "Racing": ["Open World","Motorsport","Motocross","Cycling"]
 };
 
+let subgenreChildrenMap = {};
+
+fetch("/api/taxonomy")
+    .then(res => res.json())
+    .then(data => {
+        subgenreChildrenMap = data.children_by_subgenre || {};
+        if (document.getElementById("compare-type")?.value === "tag") populateCompareValueOptions();
+    })
+    .catch(() => {});
+
+function populateCompareSubOptions(genre) {
+    const subSelect = document.getElementById("compare-sub-value");
+    const controls  = document.getElementById("compare-controls");
+    if (!subSelect) return;
+    const tags = SUBGENRES[genre] || [];
+    const seen = new Set();
+    let html = `<option value="">Subgenre (optional)…</option>`;
+    tags.forEach(tag => {
+        if (seen.has(tag)) return;
+        seen.add(tag);
+        html += `<option value="${tag}">${tag}</option>`;
+        (subgenreChildrenMap[tag] || []).forEach(child => {
+            if (seen.has(child)) return;
+            seen.add(child);
+            html += `<option value="${child}">↳ ${child}</option>`;
+        });
+    });
+    subSelect.innerHTML = html;
+    subSelect.style.display = "";
+    controls.style.gridTemplateColumns = "minmax(0,1fr) minmax(0,1fr) auto";
+}
+
+function populateCompareValueOptions() {
+    const valueSelect = document.getElementById("compare-value");
+    const subSelect   = document.getElementById("compare-sub-value");
+    const controls    = document.getElementById("compare-controls");
+    if (!valueSelect) return;
+    valueSelect.innerHTML = `<option value="">Pick genre…</option>`;
+    Object.keys(SUBGENRES).forEach(g => {
+        valueSelect.innerHTML += `<option value="${g}">${g}</option>`;
+    });
+    subSelect.style.display = "none";
+    controls.style.gridTemplateColumns = "minmax(0,1fr) auto";
+}
+
+document.getElementById("compare-value")?.addEventListener("change", function () {
+    const subSelect = document.getElementById("compare-sub-value");
+    if (!subSelect) return;
+    if (this.value) {
+        populateCompareSubOptions(this.value);
+    } else {
+        subSelect.style.display = "none";
+        document.getElementById("compare-controls").style.gridTemplateColumns = "minmax(0,1fr) auto";
+    }
+});
+
+populateCompareValueOptions();
+
 // ----------------------------
 // Home: Genre Trend Chart
 // ----------------------------
@@ -494,7 +552,7 @@ document.querySelectorAll(".genre-item").forEach(item => {
 function loadSubgenres(genre, afterElement) {
     const nav = document.createElement("div");
     nav.className = "subgenre-nav";
-    nav.innerHTML = `<span class="subgenre-loading">Loading…</span>`;
+    nav.innerHTML = `<span class="subgenre-loading">${randomQuip(genre)}</span>`;
     afterElement.after(nav);
 
     fetch(`/api/subgenres/${encodeURIComponent(genre)}`)
@@ -571,7 +629,7 @@ async function loadChildSubgenres(group, genre, parentTag, toggleBtn = null) {
     const wrap = group.querySelector(".subgenre-children");
     if (!wrap || group.dataset.childrenLoaded) return;
 
-    wrap.innerHTML = `<span class="subgenre-loading">Loading…</span>`;
+    wrap.innerHTML = `<span class="subgenre-loading">${randomQuip()}</span>`;
 
     try {
         const res = await fetch(`/api/insights/subgenre-children?genre=${encodeURIComponent(genre)}&subgenre=${encodeURIComponent(parentTag)}`);
@@ -758,6 +816,7 @@ function renderMarketSummary(data, context) {
             ${config.sharedStats}
         </div>
         ${secondaryCards}
+        <p class="steam-pc-note">Steam PC estimates only · Console, launcher, and MTX revenue not included</p>
     `;
 }
 
@@ -774,6 +833,10 @@ async function fetchMarketOverview(name, options = {}) {
         activeBriefContext = isSubgenre
             ? { genre: parentGenre || "", tag: name }
             : { genre: name, tag: "" };
+
+        const marketGrid = document.getElementById("market-grid");
+        if (marketGrid) marketGrid.innerHTML = `<div class="market-card market-card-primary"><p class="loading-quip" style="margin:0">${randomQuip(parentGenre || name)}</p></div>`;
+        document.getElementById("market-section").classList.remove("hidden");
 
         let url = isSubgenre
             ? `/api/market/tag/${encodeURIComponent(name)}${parentGenre ? `?genre=${encodeURIComponent(parentGenre)}` : ""}`
@@ -935,21 +998,37 @@ function renderCompareResults(data) {
 }
 
 async function runCompare() {
-    const type = document.getElementById("compare-type")?.value || "genre";
-    const value = document.getElementById("compare-value")?.value.trim();
-    if (!value || (!activeBriefContext.genre && !activeBriefContext.tag)) return;
+    const genrePick = document.getElementById("compare-value")?.value;
+    const tagPick   = document.getElementById("compare-sub-value")?.value;
+    const isTag     = !!tagPick;
+    const value     = isTag ? tagPick : genrePick;
+    if (!genrePick || (!activeBriefContext.genre && !activeBriefContext.tag)) return;
+
+    const btn = document.getElementById("compare-run");
+    const originalLabel = btn?.textContent;
+    if (btn) { btn.disabled = true; btn.textContent = randomQuip(genrePick || activeBriefContext.genre); }
 
     const params = new URLSearchParams();
     params.set("left_type", activeBriefContext.tag ? "tag" : "genre");
     params.set("left", activeBriefContext.tag || activeBriefContext.genre);
     if (activeBriefContext.tag && activeBriefContext.genre) params.set("left_genre", activeBriefContext.genre);
-    params.set("right_type", type);
+    params.set("right_type", isTag ? "tag" : "genre");
     params.set("right", value);
-    if (type === "tag" && activeBriefContext.genre) params.set("right_genre", activeBriefContext.genre);
+    if (isTag) params.set("right_genre", genrePick);
 
     const res = await fetch(`/api/insights/compare?${params.toString()}`);
-    if (!res.ok) return;
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        const container = document.getElementById("compare-results");
+        if (container) {
+            container.classList.remove("hidden");
+            container.innerHTML = `<p class="compare-error">${err.error || "No match found"} — couldn't load market data for "${value}".</p>`;
+        }
+        if (btn) { btn.disabled = false; btn.textContent = originalLabel; }
+        return;
+    }
     const data = await res.json();
+    if (btn) { btn.disabled = false; btn.textContent = originalLabel; }
     activeCompareState = {
         left: {
             type: activeBriefContext.tag ? "tag" : "genre",
@@ -957,9 +1036,9 @@ async function runCompare() {
             genre: activeBriefContext.genre || "",
         },
         right: {
-            type,
+            type: isTag ? "tag" : "genre",
             value,
-            genre: type === "tag" ? (activeBriefContext.genre || "") : "",
+            genre: isTag ? genrePick : "",
         },
     };
     renderCompareResults(data);
@@ -1221,9 +1300,89 @@ async function loadPage() {
     }
 }
 
+const GENRE_QUIPS = {
+    "Action": [
+        "Counting explosions… there are a lot of explosions.",
+        "Sorting 38,000 action heroes by how hard they punch.",
+        "Dodging bullets while pulling your data…",
+        "Loading. Don't worry, nobody respawns here.",
+        "Wading through a sea of hack-and-slash titles…",
+    ],
+    "Adventure": [
+        "Following the breadcrumb trail through thousands of adventures…",
+        "Mapping every dungeon, cave, and mysterious island…",
+        "Reading every journal entry so you don't have to.",
+        "Consulting the ancient scroll of Steam data…",
+        "Exploring the Adventure market. Watch out for traps.",
+    ],
+    "Casual": [
+        "Matching tiles and counting coins… almost done.",
+        "Rounding up every hidden object and cozy puzzle…",
+        "Don't stress — we're almost done. Very on-brand for Casual.",
+        "Counting match-3 levels. There are tens of thousands.",
+        "Gathering all the chill games. This won't hurt.",
+    ],
+    "Indie": [
+        "Listening to the chiptune soundtrack while we load…",
+        "Sorting through every pixel art masterpiece on Steam…",
+        "There are a LOT of Metroidvanias. Hang tight.",
+        "Hand-crafting your results with love and lo-fi beats.",
+        "Wading through heartfelt dev manifestos…",
+    ],
+    "RPG": [
+        "Rolling for initiative on 10,000 RPGs…",
+        "Grinding through the data so you don't have to.",
+        "Consulting the ancient tome of Steam market lore…",
+        "Loading. Your character's backstory is being generated.",
+        "Calculating XP for every RPG on the platform…",
+    ],
+    "Simulation": [
+        "Simulating the simulation… this gets philosophical.",
+        "Managing the management games. Very meta.",
+        "Running the numbers on every city builder and tycoon…",
+        "Someone left a factory running. Cleaning that up first.",
+        "Counting every virtual farm, hospital, and railroad.",
+    ],
+    "Strategy": [
+        "Deploying scouts to survey the Strategy market…",
+        "Moving pieces across a very large board…",
+        "Calculating 40,000 possible outcomes. Almost there.",
+        "The AI is plotting its next move. So are we.",
+        "Executing a 12-step plan to fetch your data.",
+    ],
+    "Sports": [
+        "Checking the stats on every sports title in the league…",
+        "Blowing the whistle on thousands of sports games…",
+        "Running the numbers. Literally — there's a lot of running.",
+        "Reviewing the game tape… all of it.",
+        "Warming up the Sports market data. Stretch first.",
+    ],
+    "Racing": [
+        "Burning rubber through the Racing catalog…",
+        "Checking lap times across thousands of titles…",
+        "Pit stop — grabbing your data now.",
+        "Flooring it through the Steam Racing market…",
+        "No loading screen corners were cut. (Okay, maybe one.)",
+    ],
+    "default": [
+        "Sifting through thousands of games… gimme a sec.",
+        "Asking the Steam database very nicely…",
+        "Crunching numbers. There are a lot of numbers.",
+        "Interrogating SteamSpy. They're cooperating.",
+        "Calculating your future millions… probably.",
+        "Hold tight, doing math across the entire catalog.",
+        "Bribing the algorithm with virtual coins…",
+    ],
+};
+
+function randomQuip(genre) {
+    const pool = GENRE_QUIPS[genre] || GENRE_QUIPS["default"];
+    return pool[Math.floor(Math.random() * pool.length)];
+}
+
 function showLoading() {
     const grid = document.getElementById("results-grid");
-    grid.innerHTML = `<div class="loading-state"><div class="chat-typing"><span></span><span></span><span></span></div></div>`;
+    grid.innerHTML = `<div class="loading-state"><div class="chat-typing"><span></span><span></span><span></span></div><p class="loading-quip">${randomQuip(activeGenre)}</p></div>`;
     document.getElementById("no-results").classList.add("hidden");
     document.getElementById("pagination").innerHTML = "";
 }
@@ -1268,7 +1427,7 @@ function buildCard(game) {
     if (isFree) {
         revenueText = `Free to Play · ${formatNumber(reviews)} reviews`;
     } else if (revHigh > 0) {
-        revenueText = `Est. Revenue: ${formatMoney(revLow)} – ${formatMoney(revHigh)}`;
+        revenueText = `Est. Revenue: ${formatMoney(revLow)} – ${formatMoney(revHigh)} · Steam PC`;
     } else {
         revenueText = `${formatNumber(reviews)} reviews`;
     }
@@ -1352,6 +1511,8 @@ async function openDetail(appId) {
                 <div class="value">${isFree ? "Free" : "$" + (game.price?.current || 0).toFixed(2)}</div>
             </div>
         </div>
+
+        <p class="steam-pc-note">Steam PC estimates only · Console, launcher, and MTX revenue not included</p>
 
         <p class="section-title">Tags</p>
         <div class="tags">

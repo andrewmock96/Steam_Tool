@@ -785,6 +785,15 @@ body {
     border-radius: 12px;
 }
 
+.compare-error {
+    padding: 12px 16px;
+    background: rgba(220, 60, 60, 0.1);
+    border: 1px solid rgba(220, 60, 60, 0.35);
+    border-radius: 12px;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
 .insight-card h3,
 .insight-card h4 {
     font-family: var(--font-head);
@@ -1502,6 +1511,21 @@ body {
     letter-spacing: 0.1em;
     margin-bottom: 9px;
     margin-top: 22px;
+}
+
+.steam-pc-note {
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    margin-top: 10px;
+    margin-bottom: 0;
+}
+
+.loading-quip {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-top: 10px;
+    font-style: italic;
+    text-align: center;
 }
 
 .stats-grid {

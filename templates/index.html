@@ -10,7 +10,7 @@
     <meta property="og:description" content="Research Steam game markets, analyze competitors, and estimate revenue for indie developers.">
     <meta property="og:type" content="website">
     <link rel="icon" href="/static/favicon.png" type="image/png">
-    <link rel="stylesheet" href="/static/style.css?v=33">
+    <link rel="stylesheet" href="/static/style.css?v=35">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
@@ -153,12 +153,13 @@
                 <div class="market-tools">
                     <div class="market-tool-card compare-card">
                         <div class="market-tool-title">Compare Markets</div>
-                        <div class="compare-controls">
-                            <select id="compare-type" class="toolbar-select">
-                                <option value="genre">Genre</option>
-                                <option value="tag">Subgenre / Tag</option>
+                        <div class="compare-controls" id="compare-controls">
+                            <select id="compare-value" class="compare-input toolbar-select">
+                                <option value="">Pick genre…</option>
                             </select>
-                            <input id="compare-value" class="compare-input" type="text" placeholder="e.g. Cozy or Strategy" />
+                            <select id="compare-sub-value" class="compare-input toolbar-select" style="display:none">
+                                <option value="">Subgenre (optional)…</option>
+                            </select>
                             <button id="compare-run" class="toolbar-btn apply-btn" type="button">Compare</button>
                         </div>
                         <div id="compare-results" class="compare-results hidden"></div>
@@ -226,7 +227,7 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=42"></script>
+    <script src="/static/app.js?v=49"></script>
 
 </body>
 </html>

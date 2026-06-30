@@ -1,8 +1,21 @@
 from datetime import datetime, timedelta, timezone
 from statistics import median
 import re
+import time
 
 from virtual_tags import TAG_ALIASES, build_tag_matcher, build_virtual_tag_query, game_matches_virtual_tag, is_virtual_tag
+
+_MARKET_CACHE = {}
+_CACHE_TTL = 1800  # 30 minutes
+
+def _cache_get(key):
+    entry = _MARKET_CACHE.get(key)
+    if entry and time.monotonic() - entry["ts"] < _CACHE_TTL:
+        return entry["val"]
+    return None
+
+def _cache_set(key, val):
+    _MARKET_CACHE[key] = {"val": val, "ts": time.monotonic()}
 
 
 GENRES = [
@@ -251,24 +264,27 @@ def build_market_query(genre=None, tag=None):
 
 
 def summarize_market(games_col, genre=None, tag=None):
+    cache_key = (genre or "", tag or "")
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+
     query = build_market_query(genre=genre, tag=tag)
-    games = list(games_col.find(
-        query,
-        {
-            "_id": 0,
-            "estimated_revenue": 1,
-            "estimated_owners": 1,
-            "price": 1,
-            "review_summary": 1,
-            "players": 1,
-            "is_free": 1,
-            "title": 1,
-            "tags": 1,
-            "genres": 1,
-        },
-    ))
-    if tag and is_virtual_tag(tag):
-        games = [game for game in games if game_matches_virtual_tag(game, tag)]
+    need_tags = tag and is_virtual_tag(tag)
+    projection = {
+        "_id": 0,
+        "estimated_revenue": 1,
+        "price": 1,
+        "review_summary": 1,
+        "players": 1,
+        "is_free": 1,
+    }
+    if need_tags:
+        projection["tags"] = 1
+
+    games = list(games_col.find(query, projection))
+    if need_tags:
+        games = [g for g in games if game_matches_virtual_tag(g, tag)]
 
     if not games:
         return None
@@ -311,7 +327,7 @@ def summarize_market(games_col, genre=None, tag=None):
     market_type = "tag" if tag else "genre" if genre else "all"
     confidence = _estimate_confidence(len(games), len(paid), revenue_concentration_pct)
 
-    return {
+    result = {
         "market": market_name,
         "market_type": market_type,
         "genre": genre,
@@ -380,6 +396,8 @@ def summarize_market(games_col, genre=None, tag=None):
         },
         "disclaimer": "Revenue and owner figures are SteamSpy-based estimates, not official Steam data.",
     }
+    _cache_set(cache_key, result)
+    return result
 
 
 def top_competitors(games_col, genre=None, tag=None, limit=10):
