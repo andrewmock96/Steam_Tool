@@ -614,6 +614,7 @@
 
                 <div class="actions">
                     <button id="copy-btn" type="button">Copy Brief</button>
+                    <button id="select-btn" type="button">Select Brief Text</button>
                     <a id="open-link" href="{{ ai_tool.url }}" rel="noopener">Open {{ ai_tool.label }}</a>
                 </div>
             </section>
@@ -629,6 +630,7 @@
         const statusNote = document.getElementById("status-note");
         const briefText = document.getElementById("brief-text");
         const copyBtn = document.getElementById("copy-btn");
+        const selectBtn = document.getElementById("select-btn");
         let promptText = "";
 
         async function fetchPrompt() {
@@ -651,6 +653,19 @@
             return promptText;
         }
 
+        function revealBriefText() {
+            loader.classList.add("manual");
+            briefText.style.display = "block";
+            briefText.value = promptText;
+        }
+
+        function selectBriefText() {
+            revealBriefText();
+            briefText.focus();
+            briefText.select();
+            briefText.setSelectionRange(0, briefText.value.length);
+        }
+
         async function copyPrompt() {
             if (!promptText) {
                 await fetchPrompt();
@@ -661,21 +676,15 @@
                 return;
             }
 
-            briefText.style.display = "block";
-            briefText.focus();
-            briefText.select();
-            briefText.setSelectionRange(0, briefText.value.length);
+            selectBriefText();
             const copied = document.execCommand("copy");
             if (!copied) throw new Error("Clipboard copy was blocked.");
         }
 
         function showManualFallback(message) {
-            loader.classList.add("manual");
-            briefText.style.display = "block";
-            briefText.focus();
-            briefText.select();
+            selectBriefText();
             statusText.textContent = message;
-            statusNote.textContent = `Paste the copied brief into the ${aiToolLabel} chat bar after it opens.`;
+            statusNote.textContent = `If the clipboard still does not update, press Ctrl+C after the text is selected, then paste it into ${aiToolLabel}.`;
         }
 
         async function runHandoff() {
@@ -703,9 +712,14 @@
                 statusText.textContent = `Copied. Open ${aiToolLabel} when ready.`;
                 statusNote.textContent = "Paste the brief into the chat bar when you get there.";
             } catch (err) {
-                statusText.textContent = "Copy is still blocked. Select the text and copy it manually.";
-                statusNote.textContent = `Then open ${aiToolLabel} and paste it into the chat bar.`;
+                showManualFallback("Copy is still blocked. Use Ctrl+C to copy the selected brief.");
             }
+        });
+
+        selectBtn.addEventListener("click", () => {
+            selectBriefText();
+            statusText.textContent = "Brief selected.";
+            statusNote.textContent = `Press Ctrl+C to copy it manually, then open ${aiToolLabel} and paste it into the chat bar.`;
         });
 
         runHandoff();

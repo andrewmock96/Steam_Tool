@@ -879,10 +879,44 @@ def build_chatgpt_prompt(payload, user_question="", brief_mode="general"):
         "You are helping an indie game developer analyze Steam market data.",
         "Use only the JSON below as your data source.",
         "Treat all revenue and owner figures as SteamSpy-based estimates, not official Steam data.",
+        "Optimize for a solo developer or small indie team, not a AAA studio or publisher-backed team.",
         mode["instruction"],
+        "Do not rely mainly on top competitor anecdotes. Use aggregate market metrics as the primary evidence and use competitor examples only to support a point.",
+        "If confidence is weak or sample coverage is thin, say so clearly and reduce certainty.",
+        "If the broad market looks crowded, identify narrower subgenres, child tags, or adjacent niches from the JSON that may be more promising.",
+        "Avoid generic advice unless it is directly justified by the provided data.",
     ]
     if user_question:
         lines.append(f"User question: {user_question}")
+    lines.extend([
+        "",
+        "Your answer must follow this exact structure:",
+        "1. Short answer",
+        "2. Verdict",
+        "3. Demand",
+        "4. Competition",
+        "5. Pricing",
+        "6. Risks",
+        "7. Best niche opportunities",
+        "8. Data confidence and weak spots",
+        "9. Recommendation for a small team",
+        "",
+        "Requirements for the analysis:",
+        "- Cite the most decision-useful metrics from the JSON, especially market_summary, performance_benchmarks, revenue_concentration_top_10_pct, confidence, smaller_subgenres, opportunities, taxonomy_context, and market_momentum when reliable.",
+        "- Distinguish between broad-market conclusions and niche/subgenre conclusions.",
+        "- Do not treat low-confidence momentum data as strong evidence.",
+        "- If a field is missing, thin, or low-confidence, say that directly instead of filling the gap with assumptions.",
+        "- Every recommendation should be tied to a specific metric, market pattern, or named niche from the JSON.",
+        "",
+        "In the Verdict section, include these labels on separate lines:",
+        "- Market Size:",
+        "- Competition:",
+        "- Saturation:",
+        "- Barrier to Entry:",
+        "- Commercial Opportunity:",
+        "",
+        "In Best niche opportunities, name up to 3 specific niches and explain why each looks better or worse than the broad market.",
+    ])
     lines.extend(["", json.dumps(payload, indent=2, sort_keys=True, default=str)])
     return "\n".join(lines)
 
