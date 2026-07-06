@@ -199,23 +199,63 @@ def _niche_reliability_label(item):
     return "higher"
 
 
-def _annotate_niche_candidates(items):
+def _recommendation_flag(reliability, confirmed_child_tag):
+    if reliability == "low":
+        return "caution"
+    if confirmed_child_tag:
+        return "yes"
+    if reliability == "higher":
+        return "caution"
+    return "caution"
+
+
+def _annotate_niche_candidates(items, confirmed_children=None):
+    confirmed = set(confirmed_children or [])
     annotated = []
     for item in items or []:
         row = dict(item)
         reliability = _niche_reliability_label(row)
+        confirmed_child_tag = row.get("market") in confirmed if row.get("market") else False
+        recommendation_flag = _recommendation_flag(reliability, confirmed_child_tag)
         row["data_reliability"] = reliability
+        row["confirmed_child_tag"] = confirmed_child_tag
+        row["market_relationship"] = "confirmed_child" if confirmed_child_tag else "adjacent_or_unconfirmed"
+        row["use_for_recommendation"] = recommendation_flag
+        row["raw_revenue_per_game_estimate"] = row.get("revenue_per_game_estimate")
         if reliability == "low":
             row["reliability_note"] = (
                 "Small sample. Revenue-per-game and opportunity signals may be skewed by one or two breakout hits."
+            )
+            row["revenue_per_game_estimate"] = None
+            row["revenue_metric_guidance"] = (
+                "Suppressed for recommendation use because this niche is low reliability. "
+                "Use broad-market outlier-adjusted benchmarks and direct competitor checks instead."
             )
         elif reliability == "medium":
             row["reliability_note"] = (
                 "Moderate sample. Treat niche upside as directional and validate against direct competitors."
             )
+            row["revenue_metric_guidance"] = (
+                "Directional only. Validate against direct competitors before using this as a planning anchor."
+            )
         else:
             row["reliability_note"] = (
                 "Larger sample than most niche tags here, but still directional rather than guaranteed."
+            )
+            row["revenue_metric_guidance"] = (
+                "More decision-useful than tiny-sample niches, but still not a guaranteed outcome."
+            )
+        if confirmed_child_tag:
+            row["recommendation_note"] = (
+                "Confirmed child tag in the current taxonomy context. Safer to discuss as an FPS-specific niche."
+            )
+        elif reliability == "higher":
+            row["recommendation_note"] = (
+                "Adjacent opportunity with a stronger sample, but not confirmed as a child tag in the current taxonomy."
+            )
+        else:
+            row["recommendation_note"] = (
+                "Use as a hypothesis to validate, not as a final recommendation."
             )
         annotated.append(row)
     return annotated
@@ -266,15 +306,35 @@ def _build_brief_diagnostics(summary=None, momentum=None, smaller=None, opportun
     taxonomy_context = taxonomy or {}
     has_child_report = bool((taxonomy_context.get("child_report") or {}).get("children_found"))
     has_child_tags = bool(taxonomy_context.get("children_for_detected_tag"))
+    confirmed_children = set(taxonomy_context.get("children_for_detected_tag") or [])
+    confirmed_children.update(
+        row.get("market")
+        for row in ((taxonomy_context.get("child_report") or {}).get("children_found") or [])
+        if row.get("market")
+    )
     if not has_child_report and not has_child_tags:
         diagnostics["red_flags"].append(
             "Taxonomy support is thin for this market. Some niche recommendations may be adjacent tags rather than confirmed child tags."
         )
 
+    diagnostics["recommendation_flag_guide"] = {
+        "yes": "Reasonable to recommend directly, assuming the rest of the evidence is supportive.",
+        "caution": "Interesting, but validate with direct competitors and treat upside as directional.",
+        "no": "Do not recommend directly from this dataset alone.",
+    }
     diagnostics["niche_validation"] = {
-        "strongest_small_subgenres": _annotate_niche_candidates((smaller or {}).get("strongest_small_subgenres")),
-        "less_prominent_small_subgenres": _annotate_niche_candidates((smaller or {}).get("less_prominent_small_subgenres")),
-        "opportunities": _annotate_niche_candidates(opportunities),
+        "strongest_small_subgenres": _annotate_niche_candidates(
+            (smaller or {}).get("strongest_small_subgenres"),
+            confirmed_children=confirmed_children,
+        ),
+        "less_prominent_small_subgenres": _annotate_niche_candidates(
+            (smaller or {}).get("less_prominent_small_subgenres"),
+            confirmed_children=confirmed_children,
+        ),
+        "opportunities": _annotate_niche_candidates(
+            opportunities,
+            confirmed_children=confirmed_children,
+        ),
     }
     diagnostics["niche_reading_rule"] = (
         "Prefer niches that have both stronger data_reliability and a clear qualitative signal. "
@@ -992,6 +1052,7 @@ def build_chatgpt_prompt(payload, user_question="", brief_mode="general"):
         "If the broad market looks crowded, identify narrower subgenres, child tags, or adjacent niches from the JSON that may be more promising.",
         "Avoid generic advice unless it is directly justified by the provided data.",
         "If a flashy niche metric conflicts with a reliability warning, trust the reliability warning.",
+        "If a niche has use_for_recommendation set to caution, present it as a hypothesis to validate rather than a confident recommendation.",
     ]
     if user_question:
         lines.append(f"User question: {user_question}")
@@ -1016,6 +1077,8 @@ def build_chatgpt_prompt(payload, user_question="", brief_mode="general"):
         "- Every recommendation should be tied to a specific metric, market pattern, or named niche from the JSON.",
         "- Prefer outlier-adjusted benchmarks over raw TAM/SAM or raw niche revenue-per-game figures when recommending what a small team should pursue.",
         "- If taxonomy support is thin, say whether a niche is a confirmed child tag or only an adjacent opportunity.",
+        "- In niche analysis, explicitly use confirmed_child_tag, market_relationship, data_reliability, and use_for_recommendation.",
+        "- If revenue_per_game_estimate is suppressed or null for a niche, do not reconstruct it from other fields or treat raw_revenue_per_game_estimate as a planning target.",
         "",
         "In the Verdict section, include these labels on separate lines:",
         "- Market Size:",
