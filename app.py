@@ -189,6 +189,100 @@ def build_compare_data(games_col, left_genre=None, left_tag=None, right_genre=No
     }
 
 
+def _niche_reliability_label(item):
+    total_games = (item or {}).get("total_games") or 0
+    paid_games = (item or {}).get("paid_games") or 0
+    if total_games < 40 or paid_games < 30:
+        return "low"
+    if total_games < 120 or paid_games < 80:
+        return "medium"
+    return "higher"
+
+
+def _annotate_niche_candidates(items):
+    annotated = []
+    for item in items or []:
+        row = dict(item)
+        reliability = _niche_reliability_label(row)
+        row["data_reliability"] = reliability
+        if reliability == "low":
+            row["reliability_note"] = (
+                "Small sample. Revenue-per-game and opportunity signals may be skewed by one or two breakout hits."
+            )
+        elif reliability == "medium":
+            row["reliability_note"] = (
+                "Moderate sample. Treat niche upside as directional and validate against direct competitors."
+            )
+        else:
+            row["reliability_note"] = (
+                "Larger sample than most niche tags here, but still directional rather than guaranteed."
+            )
+        annotated.append(row)
+    return annotated
+
+
+def _build_brief_diagnostics(summary=None, momentum=None, smaller=None, opportunities=None, taxonomy=None):
+    diagnostics = {
+        "decision_rules": [
+            "Prefer outlier-adjusted per-game benchmarks over raw TAM/SAM when judging indie feasibility.",
+            "Treat broad-market size as context, not proof that a small team can win there.",
+            "Use top competitors as examples, not the main evidence base.",
+            "Downweight any niche with low data_reliability or missing taxonomy support.",
+        ],
+        "red_flags": [],
+        "niche_reliability_guide": {
+            "higher": "Larger niche sample; still directional, but more decision-useful than tiny-sample niches.",
+            "medium": "Usable for exploration, but validate with direct competitor reads.",
+            "low": "Thin-sample niche; do not treat large revenue-per-game numbers as realistic targets.",
+        },
+    }
+
+    if summary:
+        sample_notes = summary.get("sample_notes") or {}
+        diagnostics["benchmark_preference"] = {
+            "prefer": "realistic_revenue_target and performance_benchmarks.per_game_revenue_estimate",
+            "avoid_overweighting": "TAM, SAM, and raw niche revenue-per-game values when making indie go/no-go calls",
+            "reason": sample_notes.get("outlier_handling"),
+        }
+        legacy_low = ((summary.get("SOM") or {}).get("legacy_percent_capture_low")) or 0
+        som_high = ((summary.get("SOM") or {}).get("high")) or 0
+        if legacy_low and som_high and legacy_low > som_high * 50:
+            diagnostics["red_flags"].append(
+                "Ignore SOM legacy_percent_capture fields for decision-making; they can dwarf the outlier-adjusted SOM range."
+            )
+
+    if momentum:
+        if (momentum.get("confidence") or "").lower() == "low":
+            diagnostics["red_flags"].append(
+                "Momentum is low-confidence. Do not use it as evidence of market growth or decline."
+            )
+        if momentum.get("sample_coverage_pct") is not None:
+            diagnostics["momentum_reading_rule"] = {
+                "sample_coverage_pct": momentum.get("sample_coverage_pct"),
+                "confidence": momentum.get("confidence"),
+                "instruction": "Only use momentum directionally when confidence is not low and coverage is reasonably broad.",
+            }
+
+    taxonomy_context = taxonomy or {}
+    has_child_report = bool((taxonomy_context.get("child_report") or {}).get("children_found"))
+    has_child_tags = bool(taxonomy_context.get("children_for_detected_tag"))
+    if not has_child_report and not has_child_tags:
+        diagnostics["red_flags"].append(
+            "Taxonomy support is thin for this market. Some niche recommendations may be adjacent tags rather than confirmed child tags."
+        )
+
+    diagnostics["niche_validation"] = {
+        "strongest_small_subgenres": _annotate_niche_candidates((smaller or {}).get("strongest_small_subgenres")),
+        "less_prominent_small_subgenres": _annotate_niche_candidates((smaller or {}).get("less_prominent_small_subgenres")),
+        "opportunities": _annotate_niche_candidates(opportunities),
+    }
+    diagnostics["niche_reading_rule"] = (
+        "Prefer niches that have both stronger data_reliability and a clear qualitative signal. "
+        "If a niche has low reliability, present it as a hypothesis to validate, not as a recommendation with firm upside."
+    )
+    return diagnostics
+
+
 # ----------------------------
 # Frontend
 # ----------------------------
@@ -839,6 +933,26 @@ def build_chatgpt_brief_payload(question="", genre=None, tag=None, brief_mode="g
             right_tag=compare.get("tag"),
         )
     concept_analysis = analyze_concept(games_col, concept_description) if concept_description else None
+    taxonomy_context = {
+        "genre_groups": groups_for_genre(genre) if genre else None,
+        "child_report": child_report,
+        "children_for_detected_tag": children_for_subgenre(tag) if tag else [],
+    }
+    prominence = prominence_report(games_col, genre=genre, limit=8)
+    smaller = smaller_subgenre_report(
+        games_col,
+        genre=genre,
+        limit=10,
+        curated_tags=_curated_subgenre_tags(genre),
+    )
+    opportunities = market_opportunities(games_col, genre=genre, limit=8)
+    brief_diagnostics = _build_brief_diagnostics(
+        summary=summary,
+        momentum=momentum,
+        smaller=smaller,
+        opportunities=opportunities,
+        taxonomy=taxonomy_context,
+    )
 
     return {
         "brief_mode": mode,
@@ -850,21 +964,13 @@ def build_chatgpt_brief_payload(question="", genre=None, tag=None, brief_mode="g
         "inferred_context": inferred,
         "market_summary": summary,
         "market_momentum": momentum,
-        "taxonomy_context": {
-            "genre_groups": groups_for_genre(genre) if genre else None,
-            "child_report": child_report,
-            "children_for_detected_tag": children_for_subgenre(tag) if tag else [],
-        },
+        "taxonomy_context": taxonomy_context,
         "top_competitors": top_competitors(games_col, genre=genre, tag=tag, limit=8) if (genre or tag) else [],
         "source_confidence": SOURCE_CONFIDENCE,
-        "doing_well_and_less_prominent": prominence_report(games_col, genre=genre, limit=8),
-        "smaller_subgenres": smaller_subgenre_report(
-            games_col,
-            genre=genre,
-            limit=10,
-            curated_tags=_curated_subgenre_tags(genre),
-        ),
-        "opportunities": market_opportunities(games_col, genre=genre, limit=8),
+        "doing_well_and_less_prominent": prominence,
+        "smaller_subgenres": smaller,
+        "opportunities": opportunities,
+        "brief_diagnostics": brief_diagnostics,
         "comparison": comparison,
         "concept_analysis": concept_analysis,
         "follow_up_prompts": build_follow_up_prompts(question=question, genre=genre, tag=tag, summary=summary),
@@ -885,6 +991,7 @@ def build_chatgpt_prompt(payload, user_question="", brief_mode="general"):
         "If confidence is weak or sample coverage is thin, say so clearly and reduce certainty.",
         "If the broad market looks crowded, identify narrower subgenres, child tags, or adjacent niches from the JSON that may be more promising.",
         "Avoid generic advice unless it is directly justified by the provided data.",
+        "If a flashy niche metric conflicts with a reliability warning, trust the reliability warning.",
     ]
     if user_question:
         lines.append(f"User question: {user_question}")
@@ -902,11 +1009,13 @@ def build_chatgpt_prompt(payload, user_question="", brief_mode="general"):
         "9. Recommendation for a small team",
         "",
         "Requirements for the analysis:",
-        "- Cite the most decision-useful metrics from the JSON, especially market_summary, performance_benchmarks, revenue_concentration_top_10_pct, confidence, smaller_subgenres, opportunities, taxonomy_context, and market_momentum when reliable.",
+        "- Cite the most decision-useful metrics from the JSON, especially market_summary, performance_benchmarks, revenue_concentration_top_10_pct, confidence, brief_diagnostics, smaller_subgenres, opportunities, taxonomy_context, and market_momentum when reliable.",
         "- Distinguish between broad-market conclusions and niche/subgenre conclusions.",
         "- Do not treat low-confidence momentum data as strong evidence.",
         "- If a field is missing, thin, or low-confidence, say that directly instead of filling the gap with assumptions.",
         "- Every recommendation should be tied to a specific metric, market pattern, or named niche from the JSON.",
+        "- Prefer outlier-adjusted benchmarks over raw TAM/SAM or raw niche revenue-per-game figures when recommending what a small team should pursue.",
+        "- If taxonomy support is thin, say whether a niche is a confirmed child tag or only an adjacent opportunity.",
         "",
         "In the Verdict section, include these labels on separate lines:",
         "- Market Size:",
@@ -916,6 +1025,7 @@ def build_chatgpt_prompt(payload, user_question="", brief_mode="general"):
         "- Commercial Opportunity:",
         "",
         "In Best niche opportunities, name up to 3 specific niches and explain why each looks better or worse than the broad market.",
+        "In Data confidence and weak spots, explicitly list any red flags from brief_diagnostics.",
     ])
     lines.extend(["", json.dumps(payload, indent=2, sort_keys=True, default=str)])
     return "\n".join(lines)
