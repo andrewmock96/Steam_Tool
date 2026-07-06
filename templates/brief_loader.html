@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Preparing Brief</title>
+    <link rel="preload" as="image" href="/branding/Logos/LightOnDarkCircle.png">
     <style>
         @font-face {
             font-family: "Visby CF";
@@ -590,7 +591,7 @@
                     <div class="progress-orb" aria-hidden="true">
                         <div class="progress-ring"></div>
                         <div class="controller-logo">
-                            <img class="controller-logo-image" src="/branding/Logos/LightOnDarkCircle.png" alt="">
+                            <img class="controller-logo-image" src="/branding/Logos/LightOnDarkCircle.png" alt="" width="124" height="124" loading="eager" fetchpriority="high" decoding="sync">
                         </div>
                     </div>
                 </div>
@@ -631,7 +632,31 @@
         const briefText = document.getElementById("brief-text");
         const copyBtn = document.getElementById("copy-btn");
         const selectBtn = document.getElementById("select-btn");
+        const controllerLogo = document.querySelector(".controller-logo-image");
         let promptText = "";
+
+        async function ensureLogoReady(timeoutMs = 1200) {
+            if (!controllerLogo) return;
+
+            if (controllerLogo.complete && controllerLogo.naturalWidth > 0) {
+                if (typeof controllerLogo.decode === "function") {
+                    try {
+                        await controllerLogo.decode();
+                    } catch (err) {
+                        // decode can reject even when the image is still paintable
+                    }
+                }
+                return;
+            }
+
+            await Promise.race([
+                new Promise((resolve) => {
+                    controllerLogo.addEventListener("load", resolve, { once: true });
+                    controllerLogo.addEventListener("error", resolve, { once: true });
+                }),
+                new Promise((resolve) => window.setTimeout(resolve, timeoutMs)),
+            ]);
+        }
 
         async function fetchPrompt() {
             const params = new URLSearchParams();
@@ -691,7 +716,7 @@
             try {
                 statusText.textContent = "Preparing your brief...";
                 statusNote.textContent = "Gathering the market context and preparing everything for the next tab.";
-                await fetchPrompt();
+                await Promise.all([fetchPrompt(), ensureLogoReady()]);
                 statusText.textContent = "Brief ready. Copying now...";
                 statusNote.textContent = "Keeping this page visible until the brief is copied and ready to paste.";
                 await copyPrompt();
