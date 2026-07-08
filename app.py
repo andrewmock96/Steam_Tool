@@ -3,6 +3,7 @@ from pymongo import MongoClient
 from dotenv import load_dotenv
 import os
 import json
+import re
 
 load_dotenv()
 
@@ -187,6 +188,102 @@ def build_compare_data(games_col, left_genre=None, left_tag=None, right_genre=No
             f"Which market gives a better pricing and launch setup: {left['market']} or {right['market']}?",
         ],
     }
+
+
+def _normalize_question(text):
+    return " ".join((text or "").strip().split())
+
+
+def _question_mentions_release_year_count(question):
+    text = (question or "").lower()
+    has_year = bool(re.search(r"\b(19|20)\d{2}\b", text))
+    year_count_phrases = (
+        "how many games",
+        "how many were published",
+        "how many were released",
+        "games published in",
+        "games released in",
+        "released in ",
+        "published in ",
+        "launches in ",
+        "launched in ",
+    )
+    return has_year and any(phrase in text for phrase in year_count_phrases)
+
+
+def _build_question_answerability(question="", inferred=None, summary=None, momentum=None, competitors=None):
+    normalized_question = _normalize_question(question)
+    inferred = inferred or {}
+    summary = summary or {}
+    competitors = competitors or []
+    resolved_market = bool(inferred.get("genre") or inferred.get("tag"))
+
+    result = {
+        "question": normalized_question,
+        "resolved_market": {
+            "genre": inferred.get("genre"),
+            "tag": inferred.get("tag"),
+            "is_resolved": resolved_market,
+        },
+        "can_answer_directly": True,
+        "confidence": "medium",
+        "primary_evidence": [],
+        "missing_requirements": [],
+        "limitations": [],
+        "recommended_response_mode": "full_market_analysis",
+    }
+
+    if normalized_question:
+        result["primary_evidence"] = [
+            "market_summary",
+            "brief_diagnostics",
+            "smaller_subgenres",
+            "opportunities",
+            "top_competitors",
+        ]
+
+    if not resolved_market and normalized_question:
+        result["limitations"].append(
+            "No specific genre or tag was resolved from the question, so broad-market conclusions may be unavailable."
+        )
+        result["confidence"] = "low"
+
+    if normalized_question and not summary:
+        result["can_answer_directly"] = False
+        result["recommended_response_mode"] = "explain_missing_market_data"
+        result["missing_requirements"].append("A resolved genre or tag with populated market_summary data.")
+
+    if _question_mentions_release_year_count(normalized_question):
+        result["can_answer_directly"] = False
+        result["confidence"] = "high"
+        result["recommended_response_mode"] = "explain_unsupported_dimension"
+        result["primary_evidence"] = ["data_available", "top_competitors"]
+        result["missing_requirements"] = [
+            "A full game-level release-date dataset or a precomputed release-year distribution for the market."
+        ]
+        result["limitations"].append(
+            "This payload does not include a market-wide release-year breakdown or a full list of matching games with release dates."
+        )
+        result["limitations"].append(
+            "Do not infer yearly publication counts from top_competitors or a handful of example games."
+        )
+
+    if momentum and (momentum.get("confidence") or "").lower() == "low":
+        result["limitations"].append(
+            "Momentum exists but is low-confidence, so it should not be treated as strong evidence of growth or decline."
+        )
+
+    if competitors and len(competitors) < 3:
+        result["limitations"].append(
+            "Top competitor coverage is thin in this payload, so competitor examples may be incomplete."
+        )
+
+    if not result["limitations"]:
+        result["limitations"].append(
+            "Use aggregate market metrics as the main evidence and treat competitor examples as supporting context."
+        )
+
+    return result
 
 
 def _niche_reliability_label(item):
@@ -1006,12 +1103,20 @@ def build_chatgpt_brief_payload(question="", genre=None, tag=None, brief_mode="g
         curated_tags=_curated_subgenre_tags(genre),
     )
     opportunities = market_opportunities(games_col, genre=genre, limit=8)
+    competitors = top_competitors(games_col, genre=genre, tag=tag, limit=8) if (genre or tag) else []
     brief_diagnostics = _build_brief_diagnostics(
         summary=summary,
         momentum=momentum,
         smaller=smaller,
         opportunities=opportunities,
         taxonomy=taxonomy_context,
+    )
+    question_answerability = _build_question_answerability(
+        question=question,
+        inferred=inferred,
+        summary=summary,
+        momentum=momentum,
+        competitors=competitors,
     )
 
     return {
@@ -1021,11 +1126,12 @@ def build_chatgpt_brief_payload(question="", genre=None, tag=None, brief_mode="g
             "Treat all revenue and owner figures as estimates, not official Steam data."
         ),
         "user_question": question,
+        "question_answerability": question_answerability,
         "inferred_context": inferred,
         "market_summary": summary,
         "market_momentum": momentum,
         "taxonomy_context": taxonomy_context,
-        "top_competitors": top_competitors(games_col, genre=genre, tag=tag, limit=8) if (genre or tag) else [],
+        "top_competitors": competitors,
         "source_confidence": SOURCE_CONFIDENCE,
         "doing_well_and_less_prominent": prominence,
         "smaller_subgenres": smaller,
@@ -1053,6 +1159,9 @@ def build_chatgpt_prompt(payload, user_question="", brief_mode="general"):
         "Avoid generic advice unless it is directly justified by the provided data.",
         "If a flashy niche metric conflicts with a reliability warning, trust the reliability warning.",
         "If a niche has use_for_recommendation set to caution, present it as a hypothesis to validate rather than a confident recommendation.",
+        "Check question_answerability before making claims. If can_answer_directly is false, say the dataset cannot answer the question directly and explain which required data is missing.",
+        "Never infer market-wide year counts, release distributions, or other unsupported dimensions from top_competitors or a few example games.",
+        "If no genre or tag was resolved, do not pretend the payload represents a defined market.",
     ]
     if user_question:
         lines.append(f"User question: {user_question}")
@@ -1070,6 +1179,7 @@ def build_chatgpt_prompt(payload, user_question="", brief_mode="general"):
         "9. Recommendation for a small team",
         "",
         "Requirements for the analysis:",
+        "- Start by checking question_answerability and align the response mode to it.",
         "- Cite the most decision-useful metrics from the JSON, especially market_summary, performance_benchmarks, revenue_concentration_top_10_pct, confidence, brief_diagnostics, smaller_subgenres, opportunities, taxonomy_context, and market_momentum when reliable.",
         "- Distinguish between broad-market conclusions and niche/subgenre conclusions.",
         "- Do not treat low-confidence momentum data as strong evidence.",
@@ -1079,6 +1189,7 @@ def build_chatgpt_prompt(payload, user_question="", brief_mode="general"):
         "- If taxonomy support is thin, say whether a niche is a confirmed child tag or only an adjacent opportunity.",
         "- In niche analysis, explicitly use confirmed_child_tag, market_relationship, data_reliability, and use_for_recommendation.",
         "- If revenue_per_game_estimate is suppressed or null for a niche, do not reconstruct it from other fields or treat raw_revenue_per_game_estimate as a planning target.",
+        "- If question_answerability.can_answer_directly is false, the Short answer must explicitly say the question is not answerable from this payload and must not guess a number.",
         "",
         "In the Verdict section, include these labels on separate lines:",
         "- Market Size:",
