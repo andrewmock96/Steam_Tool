@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from statistics import median
 import re
 import time
@@ -426,6 +426,68 @@ def top_competitors(games_col, genre=None, tag=None, limit=10):
     docs = docs[:max(1, min(int(limit), 25))]
 
     return docs
+
+
+_UPCOMING_MONTHS = {
+    "Jan": 1, "Feb": 2, "Mar": 3, "Apr": 4, "May": 5, "Jun": 6,
+    "Jul": 7, "Aug": 8, "Sep": 9, "Oct": 10, "Nov": 11, "Dec": 12,
+}
+
+
+def _parse_upcoming_date(raw):
+    """Best-effort parse of 'Mon DD, YYYY' release_date strings. Returns a sortable date or None."""
+    if not raw or not isinstance(raw, str):
+        return None
+    m = re.match(r"^([A-Za-z]{3}) (\d{1,2}), (\d{4})$", raw.strip())
+    if not m:
+        return None
+    month = _UPCOMING_MONTHS.get(m.group(1))
+    if not month:
+        return None
+    try:
+        return date(int(m.group(3)), month, int(m.group(2)))
+    except ValueError:
+        return None
+
+
+def upcoming_competitors(upcoming_col, genre=None, tag=None, limit=12):
+    """Future competitors currently in Steam's coming-soon queue, soonest release first.
+
+    Sourced from upcoming_games, which is a snapshot of games already marked
+    coming_soon=True in the main catalog (see scrape_upcoming_releases.py) —
+    real Steam data, not a third-party estimate.
+    """
+    query = {"launched_since_tracking": False}
+    if genre:
+        query["genres"] = genre
+    if tag:
+        query["tags"] = tag
+
+    docs = list(upcoming_col.find(
+        query,
+        {
+            "_id": 0,
+            "steam_app_id": 1,
+            "title": 1,
+            "release_date_raw": 1,
+            "genres": 1,
+            "developer": 1,
+            "price_current_usd": 1,
+            "header_image_url": 1,
+            "store_url": 1,
+            "first_seen": 1,
+        },
+    ))
+
+    for doc in docs:
+        parsed = _parse_upcoming_date(doc.get("release_date_raw"))
+        doc["_release_sort"] = parsed or date.max
+
+    docs.sort(key=lambda d: d["_release_sort"])
+    for doc in docs:
+        doc.pop("_release_sort", None)
+
+    return docs[:max(1, min(int(limit), 50))]
 
 
 def rank_genre_markets(games_col):

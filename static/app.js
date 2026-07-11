@@ -851,9 +851,69 @@ async function fetchMarketOverview(name, options = {}) {
         renderMarketSummary(data, { level, name, parentGenre, parentTag, hasChildren });
         renderMarketExplainer(null);
         loadFollowUpPrompts();
+        loadUpcoming(isSubgenre ? null : name, isSubgenre ? name : null);
     } catch (err) {
         console.error("Market fetch failed:", err);
     }
+}
+
+async function loadUpcoming(genre, tag) {
+    const section = document.getElementById("upcoming-section");
+    const grid = document.getElementById("upcoming-grid");
+    const empty = document.getElementById("upcoming-empty");
+    if (!section || !grid) return;
+
+    try {
+        const params = new URLSearchParams();
+        if (genre) params.set("genre", genre);
+        if (tag) params.set("tag", tag);
+        params.set("limit", "12");
+
+        const res = await fetch(`/api/market/upcoming?${params.toString()}`);
+        if (!res.ok) { section.classList.add("hidden"); return; }
+        const data = await res.json();
+
+        section.classList.remove("hidden");
+        const items = data.upcoming || [];
+
+        if (items.length === 0) {
+            grid.innerHTML = "";
+            empty.classList.remove("hidden");
+            return;
+        }
+
+        empty.classList.add("hidden");
+        grid.innerHTML = "";
+        items.forEach(game => grid.appendChild(buildUpcomingCard(game)));
+    } catch (err) {
+        console.error("Upcoming fetch failed:", err);
+        section.classList.add("hidden");
+    }
+}
+
+function buildUpcomingCard(game) {
+    const price = game.price_current_usd > 0 ? `$${game.price_current_usd.toFixed(2)}` : "";
+    const dev = (game.developer || [])[0] || "";
+    const releaseDate = game.release_date_raw || "Date TBA";
+    const storeUrl = game.store_url || "";
+
+    const card = document.createElement("div");
+    card.className = "upcoming-card";
+    card.innerHTML = `
+        <img src="${game.header_image_url || ''}" alt="${game.title}" onerror="this.style.display='none'">
+        <div class="upcoming-card-body">
+            <h4>${game.title}</h4>
+            <div class="upcoming-meta">
+                <span class="upcoming-date">${releaseDate}</span>
+                ${price ? `<span>${price}</span>` : ""}
+            </div>
+            <div class="upcoming-dev">${dev}</div>
+        </div>
+    `;
+    if (storeUrl) {
+        card.addEventListener("click", () => window.open(storeUrl, "_blank"));
+    }
+    return card;
 }
 
 // ----------------------------

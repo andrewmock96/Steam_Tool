@@ -21,6 +21,7 @@ from market_insights import (
     summarize_market,
     smaller_subgenre_report,
     top_competitors,
+    upcoming_competitors,
 )
 from market_taxonomy import (
     GENRE_SUBGENRE_GROUPS,
@@ -37,6 +38,7 @@ client = MongoClient(os.getenv("MONGO_URI"))
 db = client["steam_tool"]
 games_col = db["games"]
 genre_aggregates_col = db["genre_aggregates"]
+upcoming_games_col = db["upcoming_games"]
 
 AI_HANDOFF_TOOLS = {
     "chatgpt": {"label": "ChatGPT", "url": "https://chatgpt.com/"},
@@ -822,6 +824,26 @@ def get_competitors():
         .limit(20))
 
     return jsonify(results)
+
+
+@app.route("/api/market/upcoming")
+def get_upcoming_competitors():
+    """Future competitors currently in Steam's coming-soon queue for a genre/tag."""
+    genre = request.args.get("genre", "") or None
+    tag = request.args.get("tag", "") or None
+    limit = request.args.get("limit", 12)
+
+    if not genre and not tag:
+        return jsonify({"error": "Provide a genre or tag parameter"}), 400
+
+    results = upcoming_competitors(upcoming_games_col, genre=genre, tag=tag, limit=limit)
+    return jsonify({
+        "genre": genre,
+        "tag": tag,
+        "count": len(results),
+        "upcoming": results,
+        "source": "Steam store data (games currently marked coming_soon)",
+    })
 
 
 # ----------------------------

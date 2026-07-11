@@ -1042,6 +1042,84 @@ body {
     gap: 8px;
 }
 
+/* ─── Coming Soon / Upcoming Competitors ─── */
+.upcoming-section {
+    background: rgba(29, 39, 53, 0.58);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-top: 12px;
+}
+
+.upcoming-note {
+    font-size: 0.76rem;
+    color: var(--text-muted);
+    margin: -4px 0 12px;
+}
+
+.upcoming-empty {
+    font-size: 0.8rem;
+    color: var(--text-dim);
+}
+
+.upcoming-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 12px;
+}
+
+.upcoming-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    cursor: pointer;
+    transition: transform var(--ease), border-color var(--ease);
+}
+
+.upcoming-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--border-lit);
+}
+
+.upcoming-card img {
+    width: 100%;
+    aspect-ratio: 16/7;
+    object-fit: cover;
+    background: var(--surface);
+    display: block;
+}
+
+.upcoming-card-body { padding: 10px 11px 12px; }
+
+.upcoming-card-body h4 {
+    font-size: 0.82rem;
+    font-weight: 600;
+    margin-bottom: 5px;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.upcoming-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+}
+
+.upcoming-date { color: var(--mixed); font-weight: 600; }
+
+.upcoming-dev {
+    font-size: 0.68rem;
+    color: var(--text-dim);
+    margin-top: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .follow-up-chip {
     padding: 8px 11px;
     background: rgba(23,129,255,0.08);

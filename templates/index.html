@@ -10,7 +10,7 @@
     <meta property="og:description" content="Research Steam game markets, analyze competitors, and estimate revenue for indie developers.">
     <meta property="og:type" content="website">
     <link rel="icon" href="/static/favicon.png" type="image/png">
-    <link rel="stylesheet" href="/static/style.css?v=35">
+    <link rel="stylesheet" href="/static/style.css?v=36">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
@@ -171,6 +171,13 @@
                 </div>
                 <div id="market-grid" class="market-grid"></div>
                 <div id="market-explainer" class="market-explainer hidden"></div>
+
+                <div id="upcoming-section" class="upcoming-section hidden">
+                    <div class="market-tool-title">Coming Soon — Future Competitors</div>
+                    <p class="upcoming-note">Games currently marked "coming soon" on Steam in this market. Real store data, not an estimate.</p>
+                    <div id="upcoming-grid" class="upcoming-grid"></div>
+                    <p id="upcoming-empty" class="upcoming-empty hidden">No upcoming games currently tracked in this market.</p>
+                </div>
             </section>
 
             <!-- Results -->
@@ -227,7 +234,7 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=49"></script>
+    <script src="/static/app.js?v=50"></script>
 
 </body>
 </html>
