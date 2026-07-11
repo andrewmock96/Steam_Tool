@@ -2,6 +2,7 @@
 __pycache__/
 *.pyc
 .claude/
+.vscode/
 QUESTIONS_FOR_BOSS.md
 Branding/
 next_steps.txt
