@@ -402,25 +402,34 @@ def summarize_market(games_col, genre=None, tag=None):
 
 def top_competitors(games_col, genre=None, tag=None, limit=10):
     query = build_market_query(genre=genre, tag=tag)
-    docs = list(games_col.find(
-        query,
-        {
-            "_id": 0,
-            "title": 1,
-            "steam_app_id": 1,
-            "release_date": 1,
-            "tags": {"$slice": ["$tags", 5]},
-            "price": 1,
-            "is_free": 1,
-            "estimated_owners": 1,
-            "estimated_revenue": 1,
-            "review_summary": 1,
-            "players": 1,
-            "store_url": 1,
-        },
-    ).sort("estimated_revenue.high", -1))
+    projection = {
+        "_id": 0,
+        "title": 1,
+        "steam_app_id": 1,
+        "release_date": 1,
+        "tags": {"$slice": ["$tags", 5]},
+        "price": 1,
+        "is_free": 1,
+        "estimated_owners": 1,
+        "estimated_revenue": 1,
+        "review_summary": 1,
+        "players": 1,
+        "store_url": 1,
+    }
+    capped_limit = max(1, min(int(limit), 25))
+    # Virtual tags need the full sorted candidate set fetched before the
+    # Python-side game_matches_virtual_tag filter runs, so $limit can only
+    # be pushed into the pipeline for real (non-virtual) genre/tag queries.
+    is_virtual = bool(tag and is_virtual_tag(tag))
 
-    if tag and is_virtual_tag(tag):
+    pipeline = [{"$match": query}, {"$sort": {"estimated_revenue.high": -1}}]
+    if not is_virtual:
+        pipeline.append({"$limit": capped_limit})
+    pipeline.append({"$project": projection})
+
+    docs = list(games_col.aggregate(pipeline, allowDiskUse=True))
+
+    if is_virtual:
         docs = [doc for doc in docs if game_matches_virtual_tag(doc, tag)]
 
     docs = docs[:max(1, min(int(limit), 25))]
@@ -448,6 +457,32 @@ def _parse_upcoming_date(raw):
         return date(int(m.group(3)), month, int(m.group(2)))
     except ValueError:
         return None
+
+
+def _sort_and_drop_stale_upcoming(docs):
+    """Sort tracked coming-soon docs soonest-release-first, dropping any whose
+    release_date_raw parses to a date already in the past.
+
+    coming_soon flags only update when expand_continuous/refresh_games happens
+    to recrawl that specific game, so a game can ship and sit with a stale
+    True flag (and its original, now-past, release date) until the next
+    recrawl. Most coming-soon games have vague/unparseable dates ("Coming
+    Soon", "Q3 2026") and are unaffected; this only filters the rare case of
+    a real, cleanly-parsed date that's already passed.
+    """
+    today = date.today()
+    kept = []
+    for doc in docs:
+        parsed = _parse_upcoming_date(doc.get("release_date_raw"))
+        if parsed and parsed < today:
+            continue
+        doc["_release_sort"] = parsed or date.max
+        kept.append(doc)
+
+    kept.sort(key=lambda d: d["_release_sort"])
+    for doc in kept:
+        doc.pop("_release_sort", None)
+    return kept
 
 
 def upcoming_competitors(upcoming_col, genre=None, tag=None, limit=12):
@@ -479,15 +514,95 @@ def upcoming_competitors(upcoming_col, genre=None, tag=None, limit=12):
         },
     ))
 
-    for doc in docs:
-        parsed = _parse_upcoming_date(doc.get("release_date_raw"))
-        doc["_release_sort"] = parsed or date.max
-
-    docs.sort(key=lambda d: d["_release_sort"])
-    for doc in docs:
-        doc.pop("_release_sort", None)
+    docs = _sort_and_drop_stale_upcoming(docs)
 
     return docs[:max(1, min(int(limit), 50))]
+
+
+def upcoming_games_page(upcoming_col, genre=None, tag=None, page=0, limit=50):
+    """Paginated, soonest-release-first browse of tracked coming-soon games.
+
+    release_date_raw is a free-text Steam string ('Oct 22, 2026'), not a real
+    date field, so sorting has to happen in Python after fetch rather than as
+    a Mongo-side sort — same approach as upcoming_competitors, just paginated.
+    """
+    query = {"launched_since_tracking": False}
+    if genre:
+        query["genres"] = genre
+    if tag:
+        query["tags"] = build_tag_matcher(tag)
+
+    docs = list(upcoming_col.find(
+        query,
+        {
+            "_id": 0,
+            "steam_app_id": 1,
+            "title": 1,
+            "release_date_raw": 1,
+            "genres": 1,
+            "tags": 1,
+            "developer": 1,
+            "price_current_usd": 1,
+            "header_image_url": 1,
+            "store_url": 1,
+            "first_seen": 1,
+        },
+    ))
+
+    docs = _sort_and_drop_stale_upcoming(docs)
+
+    total = len(docs)
+    page = max(0, int(page))
+    limit = max(1, min(int(limit), 150))
+    start = page * limit
+    return docs[start:start + limit], total
+
+
+def upcoming_genre_counts(upcoming_col):
+    """Count tracked coming-soon games per top-level genre."""
+    counts = []
+    for genre in GENRES:
+        count = upcoming_col.count_documents({"genres": genre, "launched_since_tracking": False})
+        if count:
+            counts.append({"genre": genre, "count": count})
+    counts.sort(key=lambda c: c["count"], reverse=True)
+    return counts
+
+
+def upcoming_subgenre_counts(upcoming_col, genre, tags):
+    """Count tracked coming-soon games per curated subgenre tag within a genre."""
+    from market_taxonomy import children_for_subgenre
+
+    available = []
+    for tag in tags:
+        count = upcoming_col.count_documents({
+            "genres": genre,
+            "tags": build_tag_matcher(tag),
+            "launched_since_tracking": False,
+        })
+        if count > 0:
+            children = children_for_subgenre(tag)
+            available.append({
+                "tag": tag,
+                "count": count,
+                "children": children,
+                "has_children": bool(children),
+            })
+    return available
+
+
+def upcoming_subgenre_children_counts(upcoming_col, children, genre=None):
+    """Count tracked coming-soon games per child tag under a broad subgenre."""
+    results = []
+    for child in children:
+        query = {"tags": build_tag_matcher(child), "launched_since_tracking": False}
+        if genre:
+            query["genres"] = genre
+        count = upcoming_col.count_documents(query)
+        if count > 0:
+            results.append({"market": child, "total_games": count})
+    results.sort(key=lambda c: c["total_games"], reverse=True)
+    return results
 
 
 def rank_genre_markets(games_col):

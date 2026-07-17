@@ -424,7 +424,7 @@
         }
 
         .actions {
-            display: none;
+            display: flex;
             position: relative;
             z-index: 1;
             flex-wrap: wrap;
@@ -560,7 +560,7 @@
                 </div>
 
                 <h1>Preparing your brief</h1>
-                <p class="intro">We are packaging your Steam market data and taking you to <strong>{{ ai_tool.label }}</strong>. When you land there, paste the copied brief into the chat bar and send it.</p>
+                <p class="intro">We are packaging your Steam market data and opening <strong>{{ ai_tool.label }}</strong> in a new tab. This tab stays open, so paste the copied brief into the chat bar over there, and come back here any time.</p>
 
                 <div class="flow-grid">
                     <article class="flow-card">
@@ -605,10 +605,11 @@
                 </div>
 
                 <div class="paste-card">
-                    <div class="paste-title">When the next tab opens</div>
+                    <div class="paste-title">In the new tab</div>
                     <div class="paste-line"><strong>1.</strong> Click the chat bar in {{ ai_tool.label }}.</div>
                     <div class="paste-line"><strong>2.</strong> Paste the copied brief.</div>
                     <div class="paste-line"><strong>3.</strong> Send it and keep the conversation going there.</div>
+                    <div class="paste-line">This tab stays open. Come back any time to reread these steps, recopy the brief, or reopen {{ ai_tool.label }}.</div>
                 </div>
 
                 <textarea id="brief-text" readonly></textarea>
@@ -616,7 +617,7 @@
                 <div class="actions">
                     <button id="copy-btn" type="button">Copy Brief</button>
                     <button id="select-btn" type="button">Select Brief Text</button>
-                    <a id="open-link" href="{{ ai_tool.url }}" rel="noopener">Open {{ ai_tool.label }}</a>
+                    <a id="open-link" href="{{ ai_tool.url }}" target="_blank" rel="noopener">Open {{ ai_tool.label }}</a>
                 </div>
             </section>
         </main>
@@ -712,6 +713,12 @@
             statusNote.textContent = `If the clipboard still does not update, press Ctrl+C after the text is selected, then paste it into ${aiToolLabel}.`;
         }
 
+        function openAiToolInNewTab() {
+            const tab = window.open(aiToolUrl, "_blank");
+            if (tab) tab.opener = null;
+            return tab;
+        }
+
         async function runHandoff() {
             try {
                 statusText.textContent = "Preparing your brief...";
@@ -720,10 +727,10 @@
                 statusText.textContent = "Brief ready. Copying now...";
                 statusNote.textContent = "Keeping this page visible until the brief is copied and ready to paste.";
                 await copyPrompt();
-                statusText.textContent = `Copied. Opening ${aiToolLabel}...`;
-                statusNote.textContent = "When you land there, paste into the chat bar and send it.";
+                statusText.textContent = `Copied. Opening ${aiToolLabel} in a new tab...`;
+                statusNote.textContent = "This tab stays open — come back to reread the steps or recopy the brief any time.";
                 window.setTimeout(() => {
-                    window.location.replace(aiToolUrl);
+                    openAiToolInNewTab();
                 }, 650);
             } catch (err) {
                 console.warn("Clipboard copy failed:", err);

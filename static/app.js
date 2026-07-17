@@ -543,6 +543,12 @@ document.querySelectorAll(".genre-item").forEach(item => {
 
         document.getElementById("overview-section").classList.add("hidden");
         closeSidebar();
+
+        if (genre === "__coming_soon__") {
+            openComingSoon(item);
+            return;
+        }
+
         fetchGames(`/api/games/genre/${encodeURIComponent(genre)}`, `${genre} Games`);
         fetchMarketOverview(genre);
         loadSubgenres(genre, item);
@@ -669,6 +675,304 @@ async function loadChildSubgenres(group, genre, parentTag, toggleBtn = null) {
         if (toggle) toggle.remove();
         wrap.remove();
     }
+}
+
+// ----------------------------
+// Coming Soon Nav (sidebar) — genre -> subgenre -> sub-subgenre, sourced
+// from the coming-soon tracker (upcoming_games) instead of the main paid
+// catalog. Reuses the same subgenre-nav visual classes at one extra level
+// of nesting so it looks and behaves like the regular genre tree.
+// ----------------------------
+
+let comingSoonFilter = { genre: null, tag: null };
+let comingSoonPage = 0;
+const COMING_SOON_LIMIT = 30;
+
+function clearActiveComingSoonNav() {
+    document.querySelectorAll(".cs-nav-item").forEach(el => el.classList.remove("active"));
+}
+
+function openComingSoon(afterElement) {
+    comingSoonFilter = { genre: null, tag: null };
+    comingSoonPage = 0;
+
+    document.getElementById("market-section").classList.add("hidden");
+    document.getElementById("results-toolbar")?.remove();
+    document.getElementById("filter-row")?.remove();
+
+    loadComingSoonTree(afterElement);
+    fetchComingSoonGames("Coming Soon — All Genres");
+}
+
+function loadComingSoonTree(afterElement) {
+    const nav = document.createElement("div");
+    nav.className = "subgenre-nav coming-soon-tree";
+    nav.innerHTML = `<span class="subgenre-loading">Loading coming-soon genres…</span>`;
+    afterElement.after(nav);
+
+    fetch("/api/coming-soon/genres")
+        .then(res => res.json())
+        .then(data => {
+            nav.innerHTML = "";
+            const genres = data.genres || [];
+            if (genres.length === 0) {
+                nav.innerHTML = `<span class="subgenre-loading">No coming-soon games tracked yet.</span>`;
+                return;
+            }
+
+            genres.forEach(({ genre, count }) => {
+                const group = document.createElement("div");
+                group.className = "subgenre-group";
+
+                const row = document.createElement("div");
+                row.className = "subgenre-row";
+
+                const btn = document.createElement("button");
+                btn.type = "button";
+                btn.className = "subgenre-nav-item cs-nav-item";
+                btn.innerHTML = `<span class="subgenre-nav-name">${genre}</span><span class="subgenre-nav-count">${count}</span>`;
+                btn.addEventListener("click", (e) => {
+                    e.stopPropagation();
+                    clearActiveComingSoonNav();
+                    btn.classList.add("active");
+                    comingSoonFilter = { genre, tag: null };
+                    comingSoonPage = 0;
+                    fetchComingSoonGames(`Coming Soon — ${genre}`);
+                    group.classList.add("expanded");
+                });
+                row.appendChild(btn);
+
+                const toggle = document.createElement("button");
+                toggle.type = "button";
+                toggle.className = "subgenre-expand-btn";
+                toggle.setAttribute("aria-label", `Show ${genre} subgenres`);
+                toggle.innerHTML = `<span class="subgenre-expand-icon">⌄</span>`;
+                toggle.addEventListener("click", async (e) => {
+                    e.stopPropagation();
+                    if (!group.dataset.childrenLoaded) {
+                        await loadComingSoonSubgenres(group, genre);
+                    }
+                    if (group.dataset.childCount === "0") return;
+                    group.classList.toggle("expanded");
+                });
+                row.appendChild(toggle);
+
+                const childrenWrap = document.createElement("div");
+                childrenWrap.className = "subgenre-children";
+
+                group.appendChild(row);
+                group.appendChild(childrenWrap);
+                nav.appendChild(group);
+
+                loadComingSoonSubgenres(group, genre, toggle);
+            });
+        })
+        .catch(err => {
+            console.error("Coming-soon genre load failed:", err);
+            nav.innerHTML = `<span class="subgenre-loading">Could not load coming-soon genres.</span>`;
+        });
+}
+
+async function loadComingSoonSubgenres(group, genre, toggleBtn = null) {
+    const wrap = group.querySelector(".subgenre-children");
+    if (!wrap || group.dataset.childrenLoaded) return;
+
+    wrap.innerHTML = `<span class="subgenre-loading">Loading…</span>`;
+
+    try {
+        const res = await fetch(`/api/coming-soon/subgenres/${encodeURIComponent(genre)}`);
+        if (!res.ok) throw new Error("Could not load coming-soon subgenres");
+        const items = await res.json();
+        group.dataset.childrenLoaded = "true";
+        group.dataset.childCount = String(items.length);
+        wrap.innerHTML = "";
+
+        if (!items.length) {
+            if (toggleBtn) toggleBtn.remove();
+            wrap.remove();
+            return;
+        }
+
+        items.forEach(({ tag, count, has_children }) => {
+            const subGroup = document.createElement("div");
+            subGroup.className = "subgenre-group";
+
+            const subRow = document.createElement("div");
+            subRow.className = "subgenre-row";
+
+            const subBtn = document.createElement("button");
+            subBtn.type = "button";
+            subBtn.className = "subgenre-child-item cs-nav-item";
+            subBtn.innerHTML = `<span class="subgenre-child-name">${tag}</span><span class="subgenre-nav-count">${count}</span>`;
+            subBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                clearActiveComingSoonNav();
+                subBtn.classList.add("active");
+                comingSoonFilter = { genre, tag };
+                comingSoonPage = 0;
+                fetchComingSoonGames(`Coming Soon — ${tag}`);
+                if (has_children) subGroup.classList.add("expanded");
+            });
+            subRow.appendChild(subBtn);
+
+            let subToggle = null;
+            let subChildrenWrap = null;
+            if (has_children) {
+                subToggle = document.createElement("button");
+                subToggle.type = "button";
+                subToggle.className = "subgenre-expand-btn";
+                subToggle.setAttribute("aria-label", `Show ${tag} child subgenres`);
+                subToggle.innerHTML = `<span class="subgenre-expand-icon">⌄</span>`;
+                subToggle.addEventListener("click", async (e) => {
+                    e.stopPropagation();
+                    if (!subGroup.dataset.childrenLoaded) {
+                        await loadComingSoonChildren(subGroup, genre, tag);
+                    }
+                    if (subGroup.dataset.childCount === "0") return;
+                    subGroup.classList.toggle("expanded");
+                });
+                subRow.appendChild(subToggle);
+
+                subChildrenWrap = document.createElement("div");
+                subChildrenWrap.className = "subgenre-children";
+            }
+
+            subGroup.appendChild(subRow);
+            if (subChildrenWrap) subGroup.appendChild(subChildrenWrap);
+            wrap.appendChild(subGroup);
+
+            if (has_children) {
+                loadComingSoonChildren(subGroup, genre, tag, subToggle);
+            }
+        });
+    } catch (err) {
+        console.error("Coming-soon subgenre load failed:", err);
+        group.dataset.childrenLoaded = "true";
+        group.dataset.childCount = "0";
+        if (toggleBtn) toggleBtn.remove();
+        wrap.remove();
+    }
+}
+
+async function loadComingSoonChildren(group, genre, parentTag, toggleBtn = null) {
+    const wrap = group.querySelector(".subgenre-children");
+    if (!wrap || group.dataset.childrenLoaded) return;
+
+    wrap.innerHTML = `<span class="subgenre-loading">Loading…</span>`;
+
+    try {
+        const res = await fetch(`/api/coming-soon/subgenre-children?genre=${encodeURIComponent(genre)}&subgenre=${encodeURIComponent(parentTag)}`);
+        if (!res.ok) throw new Error("Could not load coming-soon child subgenres");
+        const data = await res.json();
+        const items = data.children_found || [];
+        group.dataset.childrenLoaded = "true";
+        group.dataset.childCount = String(items.length);
+        wrap.innerHTML = "";
+
+        if (!items.length) {
+            if (toggleBtn) toggleBtn.remove();
+            wrap.remove();
+            return;
+        }
+
+        items.forEach((item) => {
+            const childTag = item.market;
+            const childBtn = document.createElement("button");
+            childBtn.type = "button";
+            childBtn.className = "subgenre-child-item cs-nav-item";
+            childBtn.innerHTML = `<span class="subgenre-child-name">${childTag}</span><span class="subgenre-nav-count">${item.total_games}</span>`;
+            childBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                clearActiveComingSoonNav();
+                childBtn.classList.add("active");
+                comingSoonFilter = { genre, tag: childTag };
+                comingSoonPage = 0;
+                fetchComingSoonGames(`Coming Soon — ${childTag}`);
+            });
+            wrap.appendChild(childBtn);
+        });
+    } catch (err) {
+        console.error("Coming-soon child subgenre load failed:", err);
+        group.dataset.childrenLoaded = "true";
+        group.dataset.childCount = "0";
+        if (toggleBtn) toggleBtn.remove();
+        wrap.remove();
+    }
+}
+
+async function fetchComingSoonGames(title) {
+    document.getElementById("results-title").textContent = title;
+    document.getElementById("results-header").classList.remove("hidden");
+
+    const grid = document.getElementById("results-grid");
+    grid.innerHTML = `<div class="loading-state"><div class="chat-typing"><span></span><span></span><span></span></div><p class="loading-quip">Gathering what's coming soon…</p></div>`;
+    document.getElementById("no-results").classList.add("hidden");
+    document.getElementById("pagination").innerHTML = "";
+
+    const params = new URLSearchParams();
+    if (comingSoonFilter.genre) params.set("genre", comingSoonFilter.genre);
+    if (comingSoonFilter.tag) params.set("tag", comingSoonFilter.tag);
+    params.set("page", String(comingSoonPage));
+    params.set("limit", String(COMING_SOON_LIMIT));
+
+    try {
+        const res = await fetch(`/api/coming-soon/games?${params.toString()}`);
+        const data = await res.json();
+        const games = data.games || [];
+        const total = data.total || 0;
+
+        grid.innerHTML = "";
+        if (games.length === 0) {
+            document.getElementById("no-results").classList.remove("hidden");
+            document.getElementById("results-count").textContent = "0 games";
+        } else {
+            document.getElementById("no-results").classList.add("hidden");
+            games.forEach(game => grid.appendChild(buildUpcomingCard(game)));
+            const start = comingSoonPage * COMING_SOON_LIMIT;
+            const end = Math.min(start + games.length, total);
+            document.getElementById("results-count").textContent =
+                `${start + 1}–${end} of ${total.toLocaleString()} games`;
+        }
+
+        renderComingSoonPagination(total, title);
+    } catch (err) {
+        console.error("Coming-soon games fetch failed:", err);
+        grid.innerHTML = "";
+        document.getElementById("no-results").classList.remove("hidden");
+    }
+}
+
+function renderComingSoonPagination(total, title) {
+    const pager = document.getElementById("pagination");
+    pager.innerHTML = "";
+    const totalPages = Math.max(1, Math.ceil(total / COMING_SOON_LIMIT));
+    if (totalPages <= 1) return;
+
+    const prevBtn = document.createElement("button");
+    prevBtn.className = "page-btn";
+    prevBtn.textContent = "‹ Prev";
+    prevBtn.disabled = comingSoonPage <= 0;
+    prevBtn.addEventListener("click", () => {
+        comingSoonPage = Math.max(0, comingSoonPage - 1);
+        fetchComingSoonGames(title);
+    });
+
+    const label = document.createElement("span");
+    label.className = "page-ellipsis";
+    label.textContent = `Page ${comingSoonPage + 1} of ${totalPages}`;
+
+    const nextBtn = document.createElement("button");
+    nextBtn.className = "page-btn";
+    nextBtn.textContent = "Next ›";
+    nextBtn.disabled = comingSoonPage >= totalPages - 1;
+    nextBtn.addEventListener("click", () => {
+        comingSoonPage = Math.min(totalPages - 1, comingSoonPage + 1);
+        fetchComingSoonGames(title);
+    });
+
+    pager.appendChild(prevBtn);
+    pager.appendChild(label);
+    pager.appendChild(nextBtn);
 }
 
 // ----------------------------

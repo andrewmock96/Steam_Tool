@@ -356,6 +356,34 @@ body {
     font-weight: 600;
 }
 
+.coming-soon-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+    color: #b9d9ff;
+}
+
+.coming-soon-item:hover {
+    color: var(--text);
+}
+
+.coming-soon-item.active {
+    background: rgba(23,129,255,0.14);
+    color: #5eaaff;
+}
+
+.coming-soon-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 4px rgba(23,129,255,0.16);
+    flex-shrink: 0;
+}
+
 /* Subgenre accordion */
 .subgenre-nav {
     display: flex;
@@ -468,7 +496,7 @@ body {
     background: transparent;
     border: none;
     border-radius: 6px;
-    color: var(--text-dim);
+    color: var(--text-muted);
     font-family: inherit;
     font-size: 0.76rem;
     font-weight: 400;
@@ -497,7 +525,7 @@ body {
 
 .subgenre-nav-count {
     font-size: 0.67rem;
-    color: var(--text-dim);
+    color: var(--text-muted);
     flex-shrink: 0;
 }
 
@@ -1109,11 +1137,11 @@ body {
     color: var(--text-muted);
 }
 
-.upcoming-date { color: var(--mixed); font-weight: 600; }
+.upcoming-date { color: #7fc2ff; font-weight: 600; }
 
 .upcoming-dev {
     font-size: 0.68rem;
-    color: var(--text-dim);
+    color: var(--text-muted);
     margin-top: 4px;
     white-space: nowrap;
     overflow: hidden;

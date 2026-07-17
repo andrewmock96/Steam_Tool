@@ -13,3 +13,6 @@ refresh_players.py
 refresh_games.py
 daily_snapshot.py
 pipeline.py
+
+# Generated at runtime, not source
+logs/
