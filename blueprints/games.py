@@ -265,16 +265,13 @@ def get_games_by_tag(tag):
 @games_bp.route("/api/overview")
 def get_overview():
     """Genre player trend data from daily snapshots for the home screen chart."""
-    from datetime import datetime, timedelta, timezone
     from db import db as mongo_db
 
     genres = ["Action", "Adventure", "Casual", "Indie", "RPG",
               "Simulation", "Strategy", "Sports", "Racing"]
 
-    thirty_ago = (datetime.now(timezone.utc) - timedelta(days=30)).strftime("%Y-%m-%d")
-
     raw = list(mongo_db["genre_snapshots"].find(
-        {"date": {"$gte": thirty_ago}},
+        {},
         {"_id": 0, "date": 1, "genre": 1, "total_players": 1}
     ).sort("date", 1))
 

@@ -307,8 +307,9 @@ def parse_game(steam_data, spy_data):
         "dlc_count":        len(dlc),
 
         # Media
-        "header_image_url": steam_data.get("header_image", ""),
-        "screenshots":      [s.get("path_full", "") for s in screenshots[:5]],
+        "header_image_url":     steam_data.get("header_image", ""),
+        "background_image_url": steam_data.get("background_raw") or steam_data.get("background", ""),
+        "screenshots":          [s.get("path_full", "") for s in screenshots],
         "store_url":        f"https://store.steampowered.com/app/{steam_data.get('steam_appid')}",
 
         # Content info

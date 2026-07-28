@@ -205,7 +205,13 @@ function renderGenreChart(genres, trend) {
             scales: {
                 x: {
                     border: { display: false },
-                    ticks: { color: "#3a506e", font: { family: "'RNS Sans', sans-serif", size: 10 }, maxRotation: 0 },
+                    ticks: {
+                        color: "#3a506e",
+                        font: { family: "'RNS Sans', sans-serif", size: 10 },
+                        autoSkip: false,
+                        maxRotation: 60,
+                        minRotation: 45,
+                    },
                     grid: { display: false }
                 },
                 y: {
@@ -280,7 +286,7 @@ function savePreferredAiTool(value) {
 }
 
 function getPreferredAiTool() {
-    return readPreferredAiTool() || preferredAiTool?.value || "chatgpt";
+    return readPreferredAiTool() || preferredAiTool?.value || "claude";
 }
 
 function getPreferredAiLabel() {
@@ -305,7 +311,46 @@ function saveBriefMode(value) {
 }
 
 function getBriefMode() {
-    return readBriefMode() || briefModeSelect?.value || "general";
+    // The dropdown is the live source of truth: it's seeded from the saved
+    // preference on load, then kept current by auto-detection or a manual
+    // pick as the user types — so it should win over the stored default,
+    // not the other way around.
+    return briefModeSelect?.value || readBriefMode() || "general";
+}
+
+// Mirrors BRIEF_MODES in helpers.py — used for the on-page hint text only.
+const BRIEF_MODE_DESCRIPTIONS = {
+    general: "A rounded market read: demand, competition, pricing, risk, and opportunity.",
+    quick: "A short, direct answer built from the 3-5 most decision-useful data points.",
+    competition: "Focused on competitor shape, benchmark titles, and where to differentiate.",
+    pricing: "Focused on pricing, review-score targets, wishlist signals, and launch timing.",
+};
+
+// Keyword hints used to auto-pick a brief mode from what's typed. Checked in
+// this order (quick > pricing > competition) since a question can plausibly
+// match more than one — brevity intent and launch/pricing topics are treated
+// as stronger signals than a passing mention of competitors.
+const MODE_KEYWORDS = {
+    quick: ["quick", "quickly", "briefly", "short answer", "tl;dr", "tldr", "just tell me", "in a sentence"],
+    pricing: ["price", "pricing", "cost", "charge", "review score", "wishlist", "launch", "revenue", "how much"],
+    competition: ["competitor", "competitors", "compete", "competition", "rival", "benchmark", "similar games", "who else"],
+};
+
+function detectBriefMode(text) {
+    const lowered = (text || "").toLowerCase();
+    if (!lowered.trim()) return null;
+    for (const mode of ["quick", "pricing", "competition"]) {
+        if (MODE_KEYWORDS[mode].some(kw => lowered.includes(kw))) return mode;
+    }
+    return null;
+}
+
+function updateBriefModeHint(isAuto = false) {
+    const hint = document.getElementById("brief-mode-hint");
+    const badge = document.getElementById("brief-mode-auto-badge");
+    const mode = briefModeSelect?.value || "general";
+    if (hint) hint.textContent = BRIEF_MODE_DESCRIPTIONS[mode] || "";
+    if (badge) badge.classList.toggle("hidden", !isAuto);
 }
 
 function syncPreferredAiTool() {
@@ -322,6 +367,7 @@ if (briefModeSelect) {
     if (savedMode && [...briefModeSelect.options].some(option => option.value === savedMode)) {
         briefModeSelect.value = savedMode;
     }
+    updateBriefModeHint();
 }
 
 preferredAiTool?.addEventListener("change", () => {
@@ -330,11 +376,22 @@ preferredAiTool?.addEventListener("change", () => {
 
 briefModeSelect?.addEventListener("change", () => {
     saveBriefMode(briefModeSelect.value);
+    updateBriefModeHint(false);
 });
 
 async function sendHeroMessage() {
     const message = (isSuggestedQuestion ? currentSuggestedQuestion : heroInput.value).trim();
     if (!message) return;
+
+    // Match on the text itself, not just the isSuggestedQuestion flag — that
+    // flag only reflects whether the typewriter/chip put this text in the
+    // box, so typing (or pasting) the exact same question yourself would
+    // otherwise silently lose the suggestion's known genre/tag/mode and fall
+    // back to free-text inference, which can easily resolve to nothing.
+    const matchedSuggestion = SUGGESTIONS.find(s => s.text === message);
+    const suggestionContext = matchedSuggestion
+        ? { genre: matchedSuggestion.genre || null, tag: matchedSuggestion.tag || null, mode: matchedSuggestion.mode || null }
+        : null;
 
     acceptSuggestedQuestion();
     heroInput.value = message;
@@ -343,14 +400,15 @@ async function sendHeroMessage() {
     heroResponse.classList.remove("hidden");
 
     try {
-        const openedNewTab = copyChatGptBrief(message);
+        const openedNewTab = copyChatGptBrief(message, suggestionContext);
         heroResponse.innerHTML = `
             <div class="hero-question">${escapeHtml(message)}</div>
             <div class="hero-answer">
-                <p>${openedNewTab ? "Opened a brief loader tab." : "Opening the brief loader here because the browser blocked the new tab."}</p>
+                <p>${openedNewTab ? "Opened a brief loader tab." : "Your browser blocked the new tab."}</p>
                 <p>It will copy the Steam market brief first, then move that tab to ${escapeHtml(getPreferredAiLabel())}.</p>
             </div>
         `;
+        if (!openedNewTab) showPopupBlockedNotice(() => copyChatGptBrief(message, suggestionContext));
     } catch (err) {
         heroResponse.innerHTML = `<p style="color:var(--negative)">Could not open the AI brief loader.</p>`;
     } finally {
@@ -364,37 +422,47 @@ heroInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") sendHeroMessage();
 });
 
+// Each suggestion carries the genre/tag its brief should resolve to, so
+// clicking it doesn't depend on the server guessing a market from free text
+// (that guess can miss — e.g. "FPS" never matches the tag "First-Person
+// Shooter" — and generic strategy questions like "what review score should
+// I target" mention no market at all, guaranteeing an unresolved brief).
+// Cross-market questions (genre rankings, prominence, "tags doing well")
+// intentionally have no genre/tag: those are answered from aggregate data
+// that isn't scoped to a single market, and forcing one would narrow it.
+// Concept-comparison questions ("audience for my game") intentionally have
+// no genre/tag either: they need a concept description, not a market pick.
 const SUGGESTIONS = [
-    "Ask AI which Steam genres look strongest right now",
-    "Ask AI which Steam markets feel underserved",
-    "Ask AI what genres are less prominent right now",
-    "Ask AI whether cozy games are still growing",
-    "Ask AI whether FPS is oversaturated",
-    "Ask AI how competitive roguelikes are",
-    "Ask AI about the metroidvania market",
-    "Ask AI how city builders perform on Steam",
-    "Ask AI about the survival game opportunity",
-    "Ask AI whether horror games are profitable",
-    "Ask AI what subgenres fit a solo developer best",
-    "Ask AI which tags attract the same audience as my game",
-    "Ask AI what audience usually buys games like this on Steam",
-    "Ask AI which player tags overlap most with cozy players",
-    "Ask AI how I should position my game for the right Steam audience",
-    "Ask AI what price range works best for indie strategy games",
-    "Ask AI for indie pricing advice",
-    "Ask AI what review score I should target",
-    "Ask AI how many wishlists I need before launch",
-    "Ask AI what a strong revenue outcome looks like in my market",
-    "Ask AI how crowded my genre is compared with similar subgenres",
-    "Ask AI whether I should focus on a niche tag or a broader genre",
-    "Ask AI which competitors I should study before launch",
-    "Ask AI what kind of market this concept would fit into",
-    "Ask AI whether my game sounds more premium or niche",
-    "Ask AI what risks stand out in this Steam market",
-    "Ask AI what opportunity signals matter most before Next Fest",
-    "Ask AI whether a demo is more important in this genre",
-    "Ask AI what tags are doing well with players right now",
-    "Ask AI about average indie RPG revenue",
+    { text: "Ask AI which Steam genres look strongest right now" },
+    { text: "Ask AI which Steam markets feel underserved" },
+    { text: "Ask AI what genres are less prominent right now" },
+    { text: "Ask AI whether cozy games are still growing", tag: "Cozy" },
+    { text: "Ask AI whether FPS is oversaturated", tag: "First-Person Shooter" },
+    { text: "Ask AI how competitive roguelikes are", tag: "Roguelike" },
+    { text: "Ask AI about the metroidvania market", tag: "Metroidvania" },
+    { text: "Ask AI how city builders perform on Steam", tag: "City Builder" },
+    { text: "Ask AI about the survival game opportunity", tag: "Survival" },
+    { text: "Ask AI whether horror games are profitable", tag: "Horror" },
+    { text: "Ask AI what subgenres fit a solo developer best", genre: "Indie" },
+    { text: "Ask AI which tags attract the same audience as my game" },
+    { text: "Ask AI what audience usually buys games like this on Steam" },
+    { text: "Ask AI which player tags overlap most with cozy players", tag: "Cozy" },
+    { text: "Ask AI how I should position my game for the right Steam audience" },
+    { text: "Ask AI what price range works best for indie strategy games", genre: "Strategy", mode: "pricing" },
+    { text: "Ask AI for indie pricing advice", genre: "Indie", mode: "pricing" },
+    { text: "Ask AI what review score I should target", genre: "Indie", mode: "pricing" },
+    { text: "Ask AI how many wishlists I need before launch", genre: "Indie", mode: "pricing" },
+    { text: "Ask AI what a strong revenue outcome looks like in my market", genre: "Indie", mode: "pricing" },
+    { text: "Ask AI how crowded my genre is compared with similar subgenres", genre: "Indie" },
+    { text: "Ask AI whether I should focus on a niche tag or a broader genre", genre: "Indie" },
+    { text: "Ask AI which competitors I should study before launch", genre: "Indie", mode: "competition" },
+    { text: "Ask AI what kind of market this concept would fit into" },
+    { text: "Ask AI whether my game sounds more premium or niche" },
+    { text: "Ask AI what risks stand out in this Steam market", genre: "Indie" },
+    { text: "Ask AI what opportunity signals matter most before Next Fest", genre: "Indie", mode: "pricing" },
+    { text: "Ask AI whether a demo is more important in this genre", genre: "Indie", mode: "pricing" },
+    { text: "Ask AI what tags are doing well with players right now" },
+    { text: "Ask AI about average indie RPG revenue", genre: "RPG" },
 ];
 
 let suggestionTimer = null;
@@ -410,7 +478,7 @@ function refillSuggestionQueue() {
         [suggestionQueue[i], suggestionQueue[j]] = [suggestionQueue[j], suggestionQueue[i]];
     }
 
-    if (suggestionQueue.length > 1 && suggestionQueue[0] === currentSuggestedQuestion) {
+    if (suggestionQueue.length > 1 && suggestionQueue[0].text === currentSuggestedQuestion) {
         [suggestionQueue[0], suggestionQueue[1]] = [suggestionQueue[1], suggestionQueue[0]];
     }
 }
@@ -420,13 +488,14 @@ function setRandomSuggestion() {
     startSuggestedQuestion(suggestionQueue.shift());
 }
 
-function startSuggestedQuestion(text) {
+function startSuggestedQuestion(suggestion) {
     clearInterval(suggestionTimer);
     heroInput.value = "";
     heroInput.classList.add("suggested");
     isSuggestedQuestion = true;
-    currentSuggestedQuestion = text;
+    currentSuggestedQuestion = suggestion.text;
 
+    const text = suggestion.text;
     let i = 0;
     suggestionTimer = setInterval(() => {
         if (!isSuggestedQuestion) {
@@ -466,6 +535,24 @@ heroInput.addEventListener("keydown", (e) => {
 });
 
 heroInput.addEventListener("paste", clearSuggestedQuestion);
+
+// Auto-pick a brief mode as the user types their own question. Only runs
+// for real user input — the suggested-question typewriter effect assigns
+// heroInput.value directly, which doesn't fire "input" events, so it can't
+// fight with a suggestion's own explicit mode (see SUGGESTIONS below).
+heroInput.addEventListener("input", () => {
+    if (isSuggestedQuestion || !briefModeSelect) return;
+    const detected = detectBriefMode(heroInput.value);
+    if (detected) {
+        briefModeSelect.value = detected;
+        updateBriefModeHint(true);
+    } else if (!heroInput.value.trim()) {
+        // Box is empty again — fall back to the saved/default mode instead
+        // of leaving an earlier auto-pick stuck in place.
+        briefModeSelect.value = readBriefMode() || "general";
+        updateBriefModeHint(false);
+    }
+});
 
 // Home button
 document.getElementById("home-btn").addEventListener("click", (e) => {
@@ -1224,12 +1311,17 @@ function buildUpcomingCard(game) {
 // AI Handoff
 // ----------------------------
 
-function copyChatGptBrief(userQuestion = "") {
+function copyChatGptBrief(userQuestion = "", contextOverride = null) {
     const params = new URLSearchParams();
-    if (activeBriefContext.genre) params.set("genre", activeBriefContext.genre);
-    if (activeBriefContext.tag) params.set("tag", activeBriefContext.tag);
+    // A suggested question's own genre/tag (when it has one) takes priority
+    // over whatever market the user happens to be browsing — the suggestion
+    // was written for a specific market, so it should resolve to that one.
+    const genre = contextOverride?.genre || activeBriefContext.genre;
+    const tag = contextOverride?.tag || activeBriefContext.tag;
+    if (genre) params.set("genre", genre);
+    if (tag) params.set("tag", tag);
     if (userQuestion) params.set("q", userQuestion);
-    params.set("mode", getBriefMode());
+    params.set("mode", contextOverride?.mode || getBriefMode());
     if (activeCompareState?.right) {
         params.set("compare_type", activeCompareState.right.type);
         params.set("compare_value", activeCompareState.right.value);
@@ -1238,17 +1330,77 @@ function copyChatGptBrief(userQuestion = "") {
     if (latestConceptAnalysis?.description) params.set("concept", latestConceptAnalysis.description);
     params.set("ai_tool", getPreferredAiTool());
 
-    const url = `/chatgpt-brief-loader${params.toString() ? "?" + params.toString() : ""}`;
+    const url = `/brief-loader${params.toString() ? "?" + params.toString() : ""}`;
+
+    // Open only the loader tab here. We used to also pre-open a blank
+    // placeholder tab for the AI tool, so the loader page could redirect it
+    // later without tripping the popup blocker on a delayed window.open().
+    // That trick backfired: the placeholder competed with this tab for
+    // focus, and no amount of deferred .focus()/.blur() timing reliably won
+    // that race — it kept landing on the blank tab instead of this one.
+    // Since opening a *single* popup here needs no such workaround (nothing
+    // else is competing for focus), and the loader page's own later
+    // window.open() call for the AI tool works fine once popups are
+    // allowed for the site (which is the same requirement the placeholder
+    // trick had anyway), we just let the loader page open that tab itself
+    // when the brief is ready. See openAiToolInNewTab() in brief_loader.html.
     const tab = window.open(url, "_blank");
+
     flashBriefButtons("Opening");
 
     if (tab) {
         tab.opener = null;
+        tab.focus();
         return true;
     }
 
-    window.location.href = url;
+    // Popup blocked: never hijack the current tab to get there — the home
+    // page must stay open. The caller shows a message asking the user to
+    // allow popups instead.
     return false;
+}
+
+function getPopupPermissionSteps() {
+    const ua = navigator.userAgent;
+    if (ua.includes("Edg/")) {
+        return "Click the icon left of the address bar → Site permissions → set Pop-ups and redirects to Allow.";
+    }
+    if (ua.includes("Firefox/")) {
+        return "Click the shield/info icon left of the address bar and turn off pop-up blocking for this site.";
+    }
+    if (ua.includes("Chrome/")) {
+        return "Click the icon left of the address bar → Site settings → set Pop-ups and redirects to Allow.";
+    }
+    return "Open your browser's site settings for this page and allow pop-ups and redirects.";
+}
+
+function showPopupBlockedNotice(retry) {
+    document.getElementById("popup-blocked-toast")?.remove();
+
+    const toast = document.createElement("div");
+    toast.id = "popup-blocked-toast";
+    toast.className = "popup-blocked-toast";
+    toast.innerHTML = `
+        <div class="popup-blocked-toast-title">
+            <span>Pop-ups are blocked</span>
+            <button type="button" class="popup-blocked-toast-close" aria-label="Dismiss">&times;</button>
+        </div>
+        <div class="popup-blocked-toast-body">Your browser blocked the brief loader tab. Allow pop-ups for this site once, and it'll open automatically every time after that.</div>
+        <div class="popup-blocked-toast-steps">${escapeHtml(getPopupPermissionSteps())}</div>
+        <div class="popup-blocked-toast-actions">
+            <button type="button" class="popup-blocked-dismiss">Dismiss</button>
+            <button type="button" class="popup-blocked-retry">Try Again</button>
+        </div>
+    `;
+    document.body.appendChild(toast);
+
+    const close = () => toast.remove();
+    toast.querySelector(".popup-blocked-toast-close").addEventListener("click", close);
+    toast.querySelector(".popup-blocked-dismiss").addEventListener("click", close);
+    toast.querySelector(".popup-blocked-retry").addEventListener("click", () => {
+        close();
+        retry?.();
+    });
 }
 
 async function writeClipboard(text) {
@@ -1294,8 +1446,12 @@ function flashBriefButtons(label) {
     });
 }
 
-document.getElementById("copy-chatgpt-brief")?.addEventListener("click", () => copyChatGptBrief());
-document.getElementById("chat-copy-brief")?.addEventListener("click", () => copyChatGptBrief());
+document.getElementById("copy-chatgpt-brief")?.addEventListener("click", () => {
+    if (!copyChatGptBrief()) showPopupBlockedNotice(() => copyChatGptBrief());
+});
+document.getElementById("chat-copy-brief")?.addEventListener("click", () => {
+    if (!copyChatGptBrief()) showPopupBlockedNotice(() => copyChatGptBrief());
+});
 
 function renderFollowUpPrompts(prompts = []) {
     const container = document.getElementById("follow-up-prompts");
@@ -1836,16 +1992,60 @@ async function openDetail(appId) {
     const revDisplay = isFree ? "Free to Play"
         : (revHigh > 0 ? `${formatMoney(revLow)} – ${formatMoney(revHigh)}` : "N/A");
 
+    const discountPct = game.price?.discount_percent || 0;
+    const priceValue = isFree ? "Free" : "$" + (game.price?.current || 0).toFixed(2);
+    const priceDisplay = discountPct > 0
+        ? `${priceValue} <span class="stat-subvalue">(-${discountPct}%)</span>`
+        : priceValue;
+
+    const metacriticScore = game.metacritic?.score;
+    const metacriticDisplay = metacriticScore != null
+        ? (game.metacritic?.url
+            ? `<a href="${game.metacritic.url}" target="_blank" rel="noopener">${metacriticScore}</a>`
+            : String(metacriticScore))
+        : "N/A";
+
+    const developer = (game.developer || []).join(", ") || "Unknown";
+    const publisher = (game.publisher || []).join(", ");
+    const metaLine = [
+        `Developer: ${developer}`,
+        publisher && publisher !== developer ? `Publisher: ${publisher}` : null,
+        `Released ${game.release_date || "Unknown"}`,
+    ].filter(Boolean).join(" · ");
+
+    const featureList = [
+        ["has_multiplayer", "Multiplayer"],
+        ["has_co_op", "Co-op"],
+        ["has_pvp", "PvP"],
+        ["has_achievements", "Achievements"],
+        ["has_cloud_saves", "Cloud Saves"],
+        ["has_full_controller", "Full Controller Support"],
+        ["has_partial_controller", "Partial Controller Support"],
+        ["has_vr_support", "VR Support"],
+    ].filter(([key]) => game.features?.[key]).map(([, label]) => label);
+
+    const languages = game.supported_languages || [];
+    const heroImageUrl = game.background_image_url || game.screenshots?.[0] || game.header_image_url || "";
+
     document.getElementById("detail-content").innerHTML = `
-        <img class="detail-image" src="${game.header_image_url || ''}" alt="${game.title}">
+        <img class="detail-image" src="${game.header_image_url || ''}" data-full="${heroImageUrl}" alt="${game.title}">
+
+        ${(game.screenshots || []).length ? `
+        <div class="detail-screenshots">
+            ${game.screenshots.slice(0, 10).map(s => `<img src="${s}" alt="${game.title} screenshot" loading="lazy">`).join("")}
+        </div>` : ""}
+
         <div class="detail-title-row">
-            <h2 class="detail-title">${game.title}</h2>
+            <h2 class="detail-title">
+                ${game.title}
+                ${game.is_early_access ? '<span class="tag early-access-badge">Early Access</span>' : ""}
+            </h2>
             <a href="steam://store/${game.steam_app_id}" class="steam-link">
                 View on Steam
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M4 1h7v7M11 1L5 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </a>
         </div>
-        <p class="detail-developer">${(game.developer || []).join(", ")} · Released ${game.release_date || "Unknown"}</p>
+        <p class="detail-developer">${metaLine}</p>
         <p class="detail-description">${game.description || "No description available."}</p>
 
         <p class="section-title">Market Estimates</p>
@@ -1871,12 +2071,42 @@ async function openDetail(appId) {
                 <div class="value">${formatNumber(game.players?.current)}</div>
             </div>
             <div class="stat-box">
+                <div class="label">Peak Players (All-Time)</div>
+                <div class="value">${formatNumber(game.players?.peak_alltime)}</div>
+            </div>
+            <div class="stat-box">
                 <div class="label">Price</div>
-                <div class="value">${isFree ? "Free" : "$" + (game.price?.current || 0).toFixed(2)}</div>
+                <div class="value">${priceDisplay}</div>
+            </div>
+            <div class="stat-box">
+                <div class="label">Metacritic</div>
+                <div class="value">${metacriticDisplay}</div>
+            </div>
+            <div class="stat-box">
+                <div class="label">DLC Count</div>
+                <div class="value">${game.dlc_count ?? 0}</div>
             </div>
         </div>
 
         <p class="steam-pc-note">Steam PC estimates only · Console, launcher, and MTX revenue not included</p>
+
+        <p class="section-title">Playtime</p>
+        <div class="stats-grid">
+            <div class="stat-box">
+                <div class="label">Avg. Playtime</div>
+                <div class="value">${formatPlaytime(game.playtime?.avg_forever)}</div>
+            </div>
+            <div class="stat-box">
+                <div class="label">Median Playtime</div>
+                <div class="value">${formatPlaytime(game.playtime?.median_forever)}</div>
+            </div>
+        </div>
+
+        <p class="section-title">Steam Features</p>
+        <div class="tags">
+            ${featureList.map(f => `<span class="tag">${f}</span>`).join("") || "<span style='color:var(--text-dim);font-size:0.8rem'>No feature data</span>"}
+            ${game.has_trailer ? '<span class="tag">Has Trailer</span>' : ""}
+        </div>
 
         <p class="section-title">Tags</p>
         <div class="tags">
@@ -1890,6 +2120,12 @@ async function openDetail(appId) {
             ${game.platforms?.linux   ? '<span class="tag">Linux</span>'   : ""}
         </div>
 
+        <p class="section-title">Supported Languages</p>
+        <div class="tags">
+            ${languages.slice(0, 10).map(l => `<span class="tag">${l}</span>`).join("") || "<span style='color:var(--text-dim);font-size:0.8rem'>No language data</span>"}
+            ${languages.length > 10 ? `<span class="tag">+${languages.length - 10} more</span>` : ""}
+        </div>
+
         <p style="margin-top:22px; font-size:0.72rem; color:var(--text-muted);">
             Figures are estimates based on SteamSpy data, not official Steam numbers.
         </p>
@@ -1900,6 +2136,70 @@ async function openDetail(appId) {
 
 document.getElementById("close-panel").addEventListener("click", () => {
     document.getElementById("detail-panel").classList.add("hidden");
+});
+
+document.getElementById("detail-panel").addEventListener("click", (e) => {
+    if (e.target.id === "detail-panel") {
+        document.getElementById("detail-panel").classList.add("hidden");
+    }
+});
+
+// ----------------------------
+// Image Lightbox
+// ----------------------------
+
+const imageLightbox = document.getElementById("image-lightbox");
+const lightboxImage = document.getElementById("lightbox-image");
+const lightboxPrev = document.getElementById("lightbox-prev");
+const lightboxNext = document.getElementById("lightbox-next");
+
+let galleryImages = [];
+let galleryIndex = 0;
+
+function showGalleryImage(index) {
+    if (!galleryImages.length) return;
+    galleryIndex = (index + galleryImages.length) % galleryImages.length;
+    lightboxImage.src = galleryImages[galleryIndex];
+    const multi = galleryImages.length > 1;
+    lightboxPrev.classList.toggle("hidden", !multi);
+    lightboxNext.classList.toggle("hidden", !multi);
+}
+
+function openLightbox(images, startIndex, alt = "") {
+    galleryImages = images.filter(Boolean);
+    if (!galleryImages.length) return;
+    lightboxImage.alt = alt;
+    showGalleryImage(startIndex);
+    imageLightbox.classList.remove("hidden");
+}
+
+function closeLightbox() {
+    imageLightbox.classList.add("hidden");
+    lightboxImage.src = "";
+    galleryImages = [];
+}
+
+document.getElementById("detail-content").addEventListener("click", (e) => {
+    const img = e.target.closest(".detail-image, .detail-screenshots img");
+    if (!img) return;
+    const allImgs = Array.from(document.querySelectorAll("#detail-content .detail-image, #detail-content .detail-screenshots img"));
+    const images = allImgs.map(el => el.dataset.full || el.src);
+    openLightbox(images, allImgs.indexOf(img), img.alt);
+});
+
+imageLightbox.addEventListener("click", (e) => {
+    if (e.target === imageLightbox) closeLightbox();
+});
+
+document.getElementById("lightbox-close").addEventListener("click", closeLightbox);
+lightboxPrev.addEventListener("click", () => showGalleryImage(galleryIndex - 1));
+lightboxNext.addEventListener("click", () => showGalleryImage(galleryIndex + 1));
+
+document.addEventListener("keydown", (e) => {
+    if (imageLightbox.classList.contains("hidden")) return;
+    if (e.key === "Escape") closeLightbox();
+    if (e.key === "ArrowLeft") showGalleryImage(galleryIndex - 1);
+    if (e.key === "ArrowRight") showGalleryImage(galleryIndex + 1);
 });
 
 // ----------------------------
@@ -1919,6 +2219,12 @@ function formatNumber(value) {
     if (value >= 1_000_000) return (value / 1_000_000).toFixed(1) + "M";
     if (value >= 1_000)     return (value / 1_000).toFixed(0)     + "K";
     return value.toString();
+}
+
+function formatPlaytime(minutes) {
+    if (!minutes) return "N/A";
+    const hours = minutes / 60;
+    return (hours >= 10 ? Math.round(hours) : hours.toFixed(1)) + "h";
 }
 
 function formatConfidence(confidence) {

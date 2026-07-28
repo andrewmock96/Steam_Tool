@@ -23,7 +23,7 @@ AI_HANDOFF_TOOLS = {
     "you": {"label": "You.com", "url": "https://you.com/?chatMode=default"},
     "deepseek": {"label": "DeepSeek", "url": "https://chat.deepseek.com/"},
 }
-DEFAULT_AI_TOOL = "chatgpt"
+DEFAULT_AI_TOOL = "claude"
 BRIEF_MODES = {
     "general": {
         "label": "Market Deep Dive",
@@ -407,7 +407,7 @@ def _annotate_niche_candidates(items, confirmed_children=None):
     return annotated
 
 
-def _build_brief_diagnostics(summary=None, momentum=None, smaller=None, opportunities=None, taxonomy=None):
+def _build_brief_diagnostics(summary=None, momentum=None, smaller=None, opportunities=None, taxonomy=None, prominence=None):
     diagnostics = {
         "decision_rules": [
             "Prefer outlier-adjusted per-game benchmarks over raw TAM/SAM when judging indie feasibility.",
@@ -461,6 +461,20 @@ def _build_brief_diagnostics(summary=None, momentum=None, smaller=None, opportun
     if not has_child_report and not has_child_tags:
         diagnostics["red_flags"].append(
             "Taxonomy support is thin for this market. Some niche recommendations may be adjacent tags rather than confirmed child tags."
+        )
+
+    # doing_well/less_prominent otherwise carry none of the reliability
+    # framework (data_reliability, confirmed_child_tag, use_for_recommendation)
+    # that smaller_subgenres/opportunities get below — which can push an AI
+    # reading this payload to ignore the most on-topic data (e.g. the actual
+    # less_prominent list for a "what's underserved" question) in favor of
+    # unrelated niches purely because those are the only ones annotated.
+    if prominence:
+        prominence["doing_well"] = _annotate_niche_candidates(
+            prominence.get("doing_well"), confirmed_children=confirmed_children
+        )
+        prominence["less_prominent"] = _annotate_niche_candidates(
+            prominence.get("less_prominent"), confirmed_children=confirmed_children
         )
 
     diagnostics["recommendation_flag_guide"] = {

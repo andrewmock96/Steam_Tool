@@ -35,6 +35,7 @@ from market_taxonomy import (
     SUBGENRE_CHILDREN,
     all_taxonomy_tags,
     children_for_subgenre,
+    genre_for_tag,
     groups_for_genre,
 )
 
@@ -276,19 +277,28 @@ def build_chatgpt_brief_payload(question="", genre=None, tag=None, brief_mode="g
             right_tag=compare.get("tag"),
         )
     concept_analysis = analyze_concept(games_col, concept_description) if concept_description else None
+
+    # When only a tag resolved (no explicit genre), scope the cross-market
+    # sections below to that tag's taxonomy parent instead of scanning every
+    # genre — otherwise "smaller_subgenres"/"opportunities" surface entirely
+    # unrelated niches (Rugby, Cricket, ...) next to e.g. a Metroidvania brief.
+    # market_summary/momentum/competitors are unaffected: those already
+    # correctly scope to the tag itself, across whichever genres it appears in.
+    scoping_genre = genre or (genre_for_tag(tag) if tag else None)
+
     taxonomy_context = {
-        "genre_groups": groups_for_genre(genre) if genre else None,
+        "genre_groups": groups_for_genre(scoping_genre) if scoping_genre else None,
         "child_report": child_report,
         "children_for_detected_tag": children_for_subgenre(tag) if tag else [],
     }
-    prominence = prominence_report(games_col, genre=genre, limit=8)
+    prominence = prominence_report(games_col, genre=scoping_genre, limit=8)
     smaller = smaller_subgenre_report(
         games_col,
-        genre=genre,
+        genre=scoping_genre,
         limit=10,
-        curated_tags=_curated_subgenre_tags(genre),
+        curated_tags=_curated_subgenre_tags(scoping_genre),
     )
-    opportunities = market_opportunities(games_col, genre=genre, limit=8)
+    opportunities = market_opportunities(games_col, genre=scoping_genre, limit=8)
     competitors = top_competitors(games_col, genre=genre, tag=tag, limit=8) if (genre or tag) else []
     brief_diagnostics = _build_brief_diagnostics(
         summary=summary,
@@ -296,6 +306,7 @@ def build_chatgpt_brief_payload(question="", genre=None, tag=None, brief_mode="g
         smaller=smaller,
         opportunities=opportunities,
         taxonomy=taxonomy_context,
+        prominence=prominence,
     )
     # `inferred` only gets populated when genre/tag were guessed from free text.
     # When the caller passes genre/tag explicitly, resolved_market must still
@@ -452,10 +463,11 @@ def get_chatgpt_prompt():
     )
     return jsonify({
         "prompt": build_chatgpt_prompt(payload, user_question=question, brief_mode=brief_mode),
+        "answerability": payload.get("question_answerability"),
     })
 
 
-@insights_bp.route("/chatgpt-brief-loader")
+@insights_bp.route("/brief-loader")
 def chatgpt_brief_loader():
     """Open a dedicated handoff page that copies the brief, then sends the tab to an AI tool."""
     ai_tool = get_ai_handoff_tool(request.args.get("ai_tool"))

@@ -31,7 +31,7 @@
                 <span>AI</span>
                 <select id="preferred-ai-tool">
                     <option value="chatgpt">ChatGPT</option>
-                    <option value="claude">Claude</option>
+                    <option value="claude" selected>Claude (Recommended)</option>
                     <option value="gemini">Gemini</option>
                     <option value="perplexity">Perplexity</option>
                     <option value="copilot">Microsoft Copilot</option>
@@ -74,7 +74,7 @@
                     <div class="sidebar-label">Genres</div>
                     <nav class="genre-nav" id="genre-nav">
                         <button class="genre-item coming-soon-item" data-genre="__coming_soon__">
-                            <span class="coming-soon-dot" aria-hidden="true"></span> Coming Soon
+                            Coming Soon
                         </button>
                         <button class="genre-item" data-genre="Action">Action</button>
                         <button class="genre-item" data-genre="Adventure">Adventure</button>
@@ -101,7 +101,7 @@
                     <p class="hero-sub">Research genres, analyze competitors, estimate revenue, and plan your launch on Steam.</p>
                     <div class="hero-controls">
                         <label class="hero-select-wrap">
-                            <span>Brief Mode</span>
+                            <span>Brief Mode <span id="brief-mode-auto-badge" class="brief-mode-auto-badge hidden">Auto</span></span>
                             <select id="brief-mode-select" class="hero-select">
                                 <option value="general">Market Deep Dive</option>
                                 <option value="quick">Quick Answer</option>
@@ -109,6 +109,7 @@
                                 <option value="pricing">Pricing and Launch</option>
                             </select>
                         </label>
+                        <p id="brief-mode-hint" class="brief-mode-hint"></p>
                     </div>
                     <div class="hero-input-wrap">
                         <input type="text" id="hero-input" placeholder="">
@@ -205,6 +206,14 @@
             <button id="close-panel">✕ Close</button>
             <div id="detail-content"></div>
         </div>
+    </div>
+
+    <!-- Image Lightbox -->
+    <div id="image-lightbox" class="image-lightbox hidden">
+        <button id="lightbox-close" aria-label="Close">✕</button>
+        <button id="lightbox-prev" class="lightbox-nav lightbox-prev" aria-label="Previous image">‹</button>
+        <img id="lightbox-image" src="" alt="">
+        <button id="lightbox-next" class="lightbox-nav lightbox-next" aria-label="Next image">›</button>
     </div>
 
     <!-- Insight Widget -->

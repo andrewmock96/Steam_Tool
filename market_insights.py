@@ -407,7 +407,12 @@ def top_competitors(games_col, genre=None, tag=None, limit=10):
         "title": 1,
         "steam_app_id": 1,
         "release_date": 1,
-        "tags": {"$slice": ["$tags", 5]},
+        # Full tags array, not a truncated slice: the query below matches
+        # on the complete list, so a game can genuinely carry the resolved
+        # tag while it's absent from an early slice (e.g. ranked 8th of 20
+        # community tags) — truncating here previously made the AI wrongly
+        # conclude matched competitors "don't actually carry the tag."
+        "tags": 1,
         "price": 1,
         "is_free": 1,
         "estimated_owners": 1,

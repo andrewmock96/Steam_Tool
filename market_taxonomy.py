@@ -219,3 +219,25 @@ def children_for_subgenre(subgenre):
 
 def groups_for_genre(genre):
     return GENRE_SUBGENRE_GROUPS.get(genre, {})
+
+
+def genre_for_tag(tag):
+    """Best-guess parent genre for a subgenre/child tag, e.g. 'Metroidvania' -> 'Action'.
+
+    Used to scope cross-market sections (smaller_subgenres, opportunities,
+    prominence) near a resolved tag when no genre was given alongside it —
+    without this, those sections default to scanning every genre, surfacing
+    thematically unrelated niches (Rugby, Cricket, ...) next to a brief
+    about a specific subgenre. A tag can appear under multiple genres (e.g.
+    Metroidvania sits under both Action and Indie); the first match is used
+    as a reasonable single scope, not a claim of exclusive ownership.
+    """
+    if not tag:
+        return None
+    for genre, groups in GENRE_SUBGENRE_GROUPS.items():
+        if tag in groups:
+            return genre
+        for children in groups.values():
+            if tag in children:
+                return genre
+    return None

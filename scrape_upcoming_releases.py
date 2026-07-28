@@ -49,7 +49,12 @@ if hasattr(sys.stdout, "reconfigure"):
 
 load_dotenv()
 
-client = MongoClient(os.getenv("MONGO_URI"))
+client = MongoClient(
+    os.getenv("MONGO_URI"),
+    connectTimeoutMS=10000,
+    serverSelectionTimeoutMS=10000,
+    socketTimeoutMS=30000,
+)
 db = client["steam_tool"]
 games_col = db["games"]
 upcoming_col = db["upcoming_games"]
