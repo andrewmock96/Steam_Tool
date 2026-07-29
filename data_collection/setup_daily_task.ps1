@@ -26,4 +26,4 @@ Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger `
     -Description "Daily sync of Steam coming-soon games: add new, mark launched, backfill tags."
 
 Write-Host "Registered scheduled task '$TaskName' to run daily at 6:00 AM."
-Write-Host "Logs will accumulate in logs\upcoming_sync.log"
+Write-Host "Logs will accumulate in ..\logs\upcoming_sync.log"

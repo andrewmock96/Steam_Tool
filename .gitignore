@@ -7,12 +7,11 @@ QUESTIONS_FOR_BOSS.md
 Branding/
 next_steps.txt
 
-# Local-only scripts (not needed on Render)
+# Local-only scripts (not needed on Render) — live in data_collection/
 expand_continuous.py
 refresh_players.py
 refresh_games.py
 daily_snapshot.py
-pipeline.py
 
 # Generated at runtime, not source
 logs/

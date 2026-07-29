@@ -5,4 +5,4 @@ REM missing them. Registered as a Windows Task Scheduler job — see
 REM setup_daily_task.ps1 in this folder.
 
 cd /d "%~dp0"
-python -u scrape_upcoming_releases.py >> logs\upcoming_sync.log 2>&1
+python -u scrape_upcoming_releases.py >> ..\logs\upcoming_sync.log 2>&1
