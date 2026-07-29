@@ -126,6 +126,7 @@
                         </div>
                         <button id="concept-analyze" class="concept-btn" type="button">Analyze Concept</button>
                     </div>
+                    <p id="concept-redirect-hint" class="concept-redirect-hint hidden"></p>
                     <textarea id="concept-input" class="concept-input" placeholder="Example: A cozy shopkeeping game where you restore a haunted bookstore, build relationships with town characters, and uncover a mystery through short exploration runs."></textarea>
                     <div id="concept-results" class="concept-results hidden"></div>
                 </div>
@@ -200,7 +201,7 @@
         </main>
     </div>
 
-    <!-- Game Detail Slide-over -->
+    <!-- Game Detail overlay (centered modal, not a side panel — see .detail-panel in style.css) -->
     <div id="detail-panel" class="detail-panel hidden">
         <div class="detail-panel-inner">
             <button id="close-panel">✕ Close</button>

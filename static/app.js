@@ -1,3 +1,21 @@
+// ============================================================
+// Going Indie — main frontend script for templates/index.html.
+// No build step / bundler: this is one plain script loaded directly by
+// the page, organized into the sections marked below (roughly in the
+// order they appear on the page). Talks to the Flask backend
+// (blueprints/*.py) entirely via fetch() calls to JSON endpoints — there's
+// no server-rendered dynamic content past the initial page shell.
+//
+// Two flows worth knowing about before editing:
+//   - AI Handoff (~line 1340): opens the brief-loader page
+//     (templates/brief_loader.html) in a new tab, which is where the
+//     "paste this into ChatGPT/Claude" prompt actually gets built and
+//     copied — see that file's own script for the rest of that flow.
+//   - Detail Panel / Image Lightbox: the centered modal that opens when
+//     you click a game card, plus the click-to-enlarge image viewer
+//     nested inside it.
+// ============================================================
+
 // ----------------------------
 // Mobile Sidebar Toggle
 // ----------------------------
@@ -389,6 +407,18 @@ async function sendHeroMessage() {
     // otherwise silently lose the suggestion's known genre/tag/mode and fall
     // back to free-text inference, which can easily resolve to nothing.
     const matchedSuggestion = SUGGESTIONS.find(s => s.text === message);
+
+    // Some suggestions ("my game", "this concept") can never resolve to a
+    // useful brief on their own — nothing captures what "my game" actually
+    // is, so the AI can only ever respond with "I need more context."
+    // Send these to the Concept Analyzer instead of a doomed brief.
+    if (matchedSuggestion?.needsConcept) {
+        acceptSuggestedQuestion();
+        heroInput.value = "";
+        redirectToConceptAnalyzer(message);
+        return;
+    }
+
     const suggestionContext = matchedSuggestion
         ? { genre: matchedSuggestion.genre || null, tag: matchedSuggestion.tag || null, mode: matchedSuggestion.mode || null }
         : null;
@@ -415,6 +445,23 @@ async function sendHeroMessage() {
         heroSend.disabled = false;
         heroSend.textContent = "Ask AI";
     }
+}
+
+function redirectToConceptAnalyzer(originalQuestion) {
+    const card = document.querySelector(".concept-card");
+    const hint = document.getElementById("concept-redirect-hint");
+    const input = document.getElementById("concept-input");
+    if (!card || !hint || !input) return;
+
+    hint.textContent = `"${originalQuestion}" needs your game's description to answer — tell us about it below and we'll analyze it.`;
+    hint.classList.remove("hidden");
+    card.classList.add("pulse-attention");
+    card.scrollIntoView({ behavior: "smooth", block: "center" });
+    input.focus();
+
+    // The animation is infinite, so it never fires "animationend" on its
+    // own — just cap how long the pulse draws attention for.
+    setTimeout(() => card.classList.remove("pulse-attention"), 5000);
 }
 
 heroSend.addEventListener("click", sendHeroMessage);
@@ -444,10 +491,10 @@ const SUGGESTIONS = [
     { text: "Ask AI about the survival game opportunity", tag: "Survival" },
     { text: "Ask AI whether horror games are profitable", tag: "Horror" },
     { text: "Ask AI what subgenres fit a solo developer best", genre: "Indie" },
-    { text: "Ask AI which tags attract the same audience as my game" },
-    { text: "Ask AI what audience usually buys games like this on Steam" },
+    { text: "Ask AI which tags attract the same audience as my game", needsConcept: true },
+    { text: "Ask AI what audience usually buys games like this on Steam", needsConcept: true },
     { text: "Ask AI which player tags overlap most with cozy players", tag: "Cozy" },
-    { text: "Ask AI how I should position my game for the right Steam audience" },
+    { text: "Ask AI how I should position my game for the right Steam audience", needsConcept: true },
     { text: "Ask AI what price range works best for indie strategy games", genre: "Strategy", mode: "pricing" },
     { text: "Ask AI for indie pricing advice", genre: "Indie", mode: "pricing" },
     { text: "Ask AI what review score I should target", genre: "Indie", mode: "pricing" },
@@ -456,8 +503,8 @@ const SUGGESTIONS = [
     { text: "Ask AI how crowded my genre is compared with similar subgenres", genre: "Indie" },
     { text: "Ask AI whether I should focus on a niche tag or a broader genre", genre: "Indie" },
     { text: "Ask AI which competitors I should study before launch", genre: "Indie", mode: "competition" },
-    { text: "Ask AI what kind of market this concept would fit into" },
-    { text: "Ask AI whether my game sounds more premium or niche" },
+    { text: "Ask AI what kind of market this concept would fit into", needsConcept: true },
+    { text: "Ask AI whether my game sounds more premium or niche", needsConcept: true },
     { text: "Ask AI what risks stand out in this Steam market", genre: "Indie" },
     { text: "Ask AI what opportunity signals matter most before Next Fest", genre: "Indie", mode: "pricing" },
     { text: "Ask AI whether a demo is more important in this genre", genre: "Indie", mode: "pricing" },

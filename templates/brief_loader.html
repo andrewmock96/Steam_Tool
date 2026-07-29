@@ -1,3 +1,17 @@
+<!--
+    The AI-brief handoff page (served by blueprints/insights.py's
+    /brief-loader route, opened in a new tab from static/app.js's
+    copyChatGptBrief()). Fetches the prepared prompt from
+    /api/insights/chatgpt-prompt, copies it to the clipboard, then opens the
+    user's chosen AI tool (Claude/ChatGPT/...) in ANOTHER new tab and moves
+    focus there — this tab stays open in the background the whole time so
+    the user can come back to reread instructions or recopy the brief.
+
+    Self-contained: its own inline <style> (not static/style.css) and its
+    own <script> at the bottom — no dependency on app.js. See that script
+    block for the actual handoff logic (runHandoff, openAiToolInNewTab,
+    the popup-blocked fallback).
+-->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -602,6 +616,11 @@
             selectBriefText();
             statusText.textContent = message;
             statusNote.textContent = `If the clipboard still does not update, press Ctrl+C after the text is selected, then paste it into ${aiToolLabel}.`;
+            // Every failure path (clipboard blocked, copy still failing on
+            // retry, ...) funnels through here, so stopping the logo
+            // animation here covers all of them — not just the success path
+            // in openAiToolInNewTab().
+            controllerLogos.forEach(el => el.classList.add("is-settled"));
         }
 
         function openAiToolInNewTab() {

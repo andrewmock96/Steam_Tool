@@ -1,3 +1,19 @@
+"""
+Core market-analysis engine: TAM/SAM/SOM sizing, revenue estimation,
+outlier-adjusted per-game benchmarks, player-momentum tracking, niche/
+opportunity scoring, and the free-text genre/tag inference used when a
+brief question doesn't explicitly name a market.
+
+Nothing here talks to Flask — every function takes a Mongo collection (and
+sometimes a db handle for cross-collection queries like player_snapshots)
+as its first argument and returns plain dicts/lists. blueprints/*.py wrap
+these as JSON routes; helpers.py's brief-building code composes several of
+them together into the AI-brief payload.
+
+Revenue/owner figures throughout are SteamSpy-derived estimates, not
+official Steam sales data — see SOURCE_CONFIDENCE below for what's
+high-confidence (Steam metadata/reviews) vs. modeled (sales estimates).
+"""
 from datetime import date, datetime, timedelta, timezone
 from statistics import median
 import re
@@ -5,6 +21,12 @@ import time
 
 from virtual_tags import TAG_ALIASES, build_tag_matcher, build_virtual_tag_query, game_matches_virtual_tag, is_virtual_tag
 
+# In-process cache for summarize_market() results — market summaries involve
+# several aggregation passes over `games`, so repeat requests for the same
+# genre/tag within the TTL window are served from memory instead of hitting
+# Mongo again. Per-process only (not shared across workers); fine at this
+# scale, but wouldn't survive a multi-process deployment without moving to
+# something shared like Redis.
 _MARKET_CACHE = {}
 _CACHE_TTL = 1800  # 30 minutes
 
@@ -104,10 +126,12 @@ DATA_POINT_CATALOG = {
 
 
 def _num(value, default=0):
+    """Coerce to a number, treating None/missing/non-numeric Mongo fields as 0 (or `default`)."""
     return value if isinstance(value, (int, float)) else default
 
 
 def _money(value):
+    """Format a number as a compact dollar string (e.g. 1_500_000 -> "$1.5M")."""
     value = _num(value)
     if value >= 1_000_000_000:
         return f"${value / 1_000_000_000:.1f}B"
@@ -119,6 +143,7 @@ def _money(value):
 
 
 def _percentile(values, pct):
+    """Linear-interpolation percentile (0.0-1.0), ignoring non-positive/missing values."""
     clean = sorted(_num(v) for v in values if _num(v) > 0)
     if not clean:
         return 0
@@ -133,6 +158,11 @@ def _percentile(values, pct):
 
 
 def _trim_top_percent(values, trim_pct=0.01):
+    """Drop the top `trim_pct` of values before computing per-game benchmarks,
+    so one or two breakout hits (a Hollow Knight, a Balatro) don't drag the
+    "realistic" target for a solo/small team upward. Only trims when there's
+    enough sample (30+) for that to be meaningful rather than just dropping
+    real data points from a small set."""
     clean = sorted(_num(v) for v in values if _num(v) > 0)
     if len(clean) < 30:
         return clean
@@ -141,6 +171,10 @@ def _trim_top_percent(values, trim_pct=0.01):
 
 
 def _estimate_confidence(total_games, paid_games, revenue_concentration_pct):
+    """Heuristic 10-85 confidence score for a market's revenue estimate,
+    based on sample size and how concentrated revenue is among top titles
+    (a market dominated by one or two hits is less predictable for a new
+    entrant than one with a broad spread of comparable performers)."""
     score = 35
     if total_games >= 1000:
         score += 25
@@ -209,6 +243,11 @@ SOURCE_CONFIDENCE = {
 }
 
 
+# Tags too generic to count as a real "niche" — used to filter these out of
+# smaller_subgenre_report/market_opportunities so recommendations point at
+# an actually-navigable subgenre instead of "Action" or "Singleplayer",
+# which describe most of the catalog and aren't a market a solo dev could
+# meaningfully target.
 BROAD_TAGS = {
     "2D",
     "3D",
@@ -251,6 +290,9 @@ BROAD_TAGS = {
 }
 
 def build_market_query(genre=None, tag=None):
+    """The base Mongo filter for "games in this genre/tag". Delegates to
+    virtual_tags first, since some tags (see virtual_tags.py) can't be
+    expressed as a simple field match and need their own query shape."""
     query = build_virtual_tag_query(tag, genre=genre) if tag else None
     if query:
         return query
@@ -264,6 +306,12 @@ def build_market_query(genre=None, tag=None):
 
 
 def summarize_market(games_col, genre=None, tag=None):
+    """The core market-sizing function: TAM/SAM/SOM, outlier-adjusted
+    revenue benchmarks (p25/p50/p75/p90 after trimming the top 1% of paid
+    games — see _trim_top_percent), pricing/review percentiles, and a
+    confidence score, for every game matching this genre and/or tag.
+    Result is cached (_MARKET_CACHE) since this scans the full matching
+    game set and gets called repeatedly for the same market."""
     cache_key = (genre or "", tag or "")
     cached = _cache_get(cache_key)
     if cached is not None:
@@ -377,6 +425,10 @@ def summarize_market(games_col, genre=None, tag=None):
             "breakout": revenue_p90,
             "label": "Outlier-adjusted per-game revenue benchmarks for paid games in this market",
         },
+        # TAM/SAM are intentionally identical here — both are just "total
+        # estimated revenue across every matching game" (the query already
+        # scopes to genre/tag, so there's no broader "addressable" universe
+        # above SAM within this function to distinguish them from).
         "TAM": {
             "low": sum(revenue_lows),
             "high": total_revenue_high,
@@ -391,6 +443,12 @@ def summarize_market(games_col, genre=None, tag=None):
             "low": revenue_p25,
             "high": revenue_p75,
             "label": "Outlier-adjusted realistic per-game capture range based on comparable paid games",
+            # Deliberately NOT used as the primary SOM range — "X% of TAM"
+            # is a much cruder estimate than the percentile-based figures
+            # above, and can wildly overstate what a small team could
+            # realistically earn. Kept only for reference; brief_diagnostics
+            # explicitly tells the AI to ignore these when they dwarf the
+            # real (outlier-adjusted) SOM range — see helpers._build_brief_diagnostics.
             "legacy_percent_capture_low": round(total_revenue_high * 0.01),
             "legacy_percent_capture_high": round(total_revenue_high * 0.10),
         },
@@ -401,6 +459,8 @@ def summarize_market(games_col, genre=None, tag=None):
 
 
 def top_competitors(games_col, genre=None, tag=None, limit=10):
+    """Highest-estimated-revenue games matching a genre/tag, for showing
+    real example titles alongside the aggregate market_summary numbers."""
     query = build_market_query(genre=genre, tag=tag)
     projection = {
         "_id": 0,
@@ -611,6 +671,8 @@ def upcoming_subgenre_children_counts(upcoming_col, children, genre=None):
 
 
 def rank_genre_markets(games_col):
+    """summarize_market() for every top-level genre — used to rank/compare
+    genres against each other (e.g. the home screen genre chart)."""
     summaries = []
     for genre in GENRES:
         summary = summarize_market(games_col, genre=genre)
@@ -620,6 +682,12 @@ def rank_genre_markets(games_col):
 
 
 def rank_tag_markets(games_col, genre=None, limit=25):
+    """Aggregate every tag across all matching games into per-tag totals
+    (games, revenue, players, avg score/price), sorted by revenue —
+    unlike rank_specific_tag_markets, this discovers tags rather than
+    being told which ones to look at. $unwind on tags is what makes this
+    expensive relative to a plain find(), hence the games_col-side
+    aggregation rather than doing it in Python."""
     match = build_market_query(genre=genre)
     pipeline = [
         {"$match": match},
@@ -664,6 +732,9 @@ def rank_tag_markets(games_col, genre=None, limit=25):
 
 
 def rank_specific_tag_markets(games_col, tags, genre=None):
+    """Same shape of result as rank_tag_markets, but scoped to a known list
+    of tags (e.g. a curated subgenre set) instead of discovering every tag
+    that appears — cheaper when the caller already knows which tags matter."""
     tag_list = sorted(set(tags or []))
     if not tag_list:
         return []
@@ -711,6 +782,11 @@ def rank_specific_tag_markets(games_col, tags, genre=None):
 
 
 def smaller_subgenre_report(games_col, genre=None, limit=15, min_games=25, max_games=750, curated_tags=None):
+    """Find tags in the "goldilocks" size range (min_games-max_games) — big
+    enough to trust the numbers, small enough to be an actually-navigable
+    niche — and score them by revenue/player density, review quality, and
+    fit to that size window. This is the main "niche opportunity" signal
+    fed into the AI brief (see niche_score / why_it_matters below)."""
     curated_tag_set = set(curated_tags or [])
     tags = (
         rank_specific_tag_markets(games_col, curated_tag_set, genre=genre)
@@ -742,6 +818,13 @@ def smaller_subgenre_report(games_col, genre=None, limit=15, min_games=25, max_g
 
         tag["revenue_per_game_estimate"] = round(revenue_per_game)
         tag["current_players_per_game"] = round(demand_density, 1)
+        # Weighted 0-100 score: revenue-per-game and player density carry
+        # the most weight (0.35/0.25) since they're the strongest signal of
+        # "worth entering." quality_signal rewards tags where existing games
+        # already review well (a healthy market), quality_gap does the
+        # opposite — rewards tags where reviews are mediocre despite demand
+        # (room to out-execute incumbents). size_fit prefers tags near 150
+        # games: enough competition data to trust, not so much it's crowded.
         tag["niche_score"] = round((
             min(1, revenue_per_game / 750_000) * 0.35
             + min(1, demand_density / 300) * 0.25
@@ -789,6 +872,12 @@ def smaller_subgenre_report(games_col, genre=None, limit=15, min_games=25, max_g
 
 
 def child_subgenre_report(games_col, parent, children, genre=None, limit=20, min_games=5):
+    """Like smaller_subgenre_report, but for a known list of "child" tags
+    under one broad subgenre (e.g. Shooter -> First-Person Shooter,
+    Battle Royale, ...) — see market_taxonomy.SUBGENRE_CHILDREN. Falls back
+    to a plain summarize_market() call for any child rank_specific_tag_markets
+    didn't return a row for (can happen if it has too few games to surface
+    in the ranked aggregation but still clears min_games here)."""
     ranked = {tag["market"]: tag for tag in rank_specific_tag_markets(games_col, children, genre=genre)}
     rows = []
 
@@ -845,6 +934,12 @@ def child_subgenre_report(games_col, parent, children, genre=None, limit=20, min
 
 
 def market_opportunities(games_col, genre=None, limit=12):
+    """Rank tags by "opportunity" — high revenue/player scale, weighted
+    against review quality (a lower avg score = more room to win on
+    quality) and competition size. Unlike smaller_subgenre_report, this
+    doesn't filter to a size window, so broad umbrella tags (Action,
+    Singleplayer) can and do show up here — they're framed as "context,
+    not a real niche" in the AI prompt instructions, not filtered out."""
     tags = rank_tag_markets(games_col, genre=genre, limit=80)
     if not tags:
         return []
@@ -870,6 +965,11 @@ def market_opportunities(games_col, genre=None, limit=12):
 
 
 def prominence_report(games_col, genre=None, limit=10):
+    """Split tags into "doing well" (highest revenue/players — the
+    already-crowded/successful markets) vs. "less prominent" (smaller
+    visibility but still enough sample to compare) via a weighted
+    prominence_score. This is what answers "what's underserved" /
+    "what's less prominent right now" style questions."""
     markets = rank_tag_markets(games_col, genre=genre, limit=100)
     if not markets:
         markets = rank_genre_markets(games_col)
@@ -909,6 +1009,22 @@ def prominence_report(games_col, genre=None, limit=10):
 
 
 def market_momentum(games_col, db, genre=None, tag=None, days=30, max_games=1500):
+    """Player-count trend over the last `days` days for a genre or tag.
+
+    Tries precomputed daily snapshots first (genre_snapshots/tag_snapshots —
+    fast, but only exist for markets a snapshot job actually tracks), and
+    falls back to aggregating raw player_snapshots for every matching game
+    id if no precomputed snapshot series exists. See _summarize_momentum
+    for the actual trend/confidence calculation.
+
+    Known issue: real AI-brief runs have surfaced what looks like a data
+    artifact — a single day's total_players collapsing far below neighboring
+    days before rebounding (see daily_snapshot.py, which writes
+    genre_snapshots). Worth investigating whether a snapshot run is
+    recording partial/incomplete counts instead of skipping on failure.
+    Until fixed, _build_question_answerability downweights low-confidence
+    momentum rather than trusting it outright.
+    """
     if tag and not genre:
         tag_result = _tag_snapshot_momentum(db, tag, days=days)
         if tag_result:
@@ -960,6 +1076,9 @@ def market_momentum(games_col, db, genre=None, tag=None, days=30, max_games=1500
 
 
 def _genre_snapshot_momentum(db, genre, days=30):
+    """Momentum from the precomputed genre_snapshots collection (one row/genre/day,
+    written by daily_snapshot.py). Returns None if there's no snapshot history yet,
+    so the caller can fall back to the slower raw player_snapshots aggregation."""
     since = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
     snapshots = list(db["genre_snapshots"].find(
         {"genre": genre, "date": {"$gte": since}},
@@ -988,6 +1107,7 @@ def _genre_snapshot_momentum(db, genre, days=30):
 
 
 def _tag_snapshot_momentum(db, tag, days=30):
+    """Same as _genre_snapshot_momentum but for the tag_snapshots collection."""
     since = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
     snapshots = list(db["tag_snapshots"].find(
         {"tag": tag, "date": {"$gte": since}},
@@ -1016,6 +1136,17 @@ def _tag_snapshot_momentum(db, tag, days=30):
 
 
 def _summarize_momentum(snapshots, genre=None, tag=None, days=30, source="unknown", sample_size=0):
+    """Turn a list of {date, total_players, games_sampled} points into a
+    first-vs-last percent-change trend with a confidence label.
+
+    unstable_sample below only catches instability in *how many games got
+    sampled* on a given day (a coverage problem) — it does NOT catch a day
+    where the normal number of games were sampled but individual player
+    counts came back wrong (a values problem). That's a real gap: repeated
+    AI-brief runs have flagged single-day total_players collapses that this
+    check doesn't catch (see the note in market_momentum above). A
+    magnitude-based outlier check against neighboring days would close it.
+    """
     if len(snapshots) < 2:
         return _empty_momentum(
             genre=genre,
@@ -1083,6 +1214,9 @@ def _summarize_momentum(snapshots, genre=None, tag=None, days=30, source="unknow
 
 
 def _empty_momentum(genre=None, tag=None, days=30, reason="", source="unknown", sample_size=0, points=None):
+    """Shared "no usable momentum data" response shape, so callers (no
+    matching games, too few snapshot points, ...) all return something the
+    frontend/AI prompt can handle uniformly instead of null/an exception."""
     return {
         "market": tag or genre or "Steam",
         "genre": genre,
@@ -1099,6 +1233,15 @@ def _empty_momentum(genre=None, tag=None, days=30, reason="", source="unknown", 
 
 
 def infer_market_context(games_col, text, known_tags=None):
+    """Guess a genre/tag from free-text (a typed question, a concept
+    description) by simple substring matching — no NLP/ML involved. Only
+    used when the caller didn't already know the genre/tag (e.g. the user
+    typed a question instead of clicking a suggestion with a known
+    genre/tag — see SUGGESTIONS in static/app.js for why most canned
+    suggestions bypass this and pass genre/tag explicitly instead: this
+    approach can miss real matches (an acronym like "FPS" won't match the
+    tag "First-Person Shooter") or find nothing for genre-agnostic
+    questions ("what review score should I target")."""
     lowered = (text or "").lower()
     genre = next((g for g in GENRES if g.lower() in lowered), None)
 
@@ -1124,6 +1267,11 @@ def infer_market_context(games_col, text, known_tags=None):
 
 
 def answer_without_llm(games_col, message):
+    """Keyword-routed canned responses for the in-app chat widget
+    (blueprints/chat.py) — no LLM call, just template strings filled from
+    real numbers. Distinct from the AI-brief system (blueprints/insights.py),
+    which hands a JSON payload off to an external tool instead of answering
+    in-app."""
     text = (message or "").strip()
     lowered = text.lower()
 
@@ -1180,6 +1328,7 @@ def answer_without_llm(games_col, message):
 
 
 def _opportunity_signal(item):
+    """Short human-readable "why this shows up as an opportunity" string for market_opportunities rows."""
     signals = []
     if _num(item.get("estimated_revenue_high")) >= 1_000_000:
         signals.append("meaningful revenue pool")
@@ -1193,6 +1342,7 @@ def _opportunity_signal(item):
 
 
 def _small_subgenre_signal(item):
+    """Short human-readable "why it matters" string for smaller_subgenre_report rows."""
     signals = []
     if _num(item.get("revenue_per_game_estimate")) >= 250_000:
         signals.append("healthy estimated revenue per game")
@@ -1208,6 +1358,8 @@ def _small_subgenre_signal(item):
 
 
 def _market_summary_path(genre, tag):
+    """Build the /api/insights/market URL for a niche row, so the AI brief
+    can point to where to pull a full summary for that specific tag."""
     if genre:
         return f"/api/insights/market?genre={genre}&tag={tag}"
     return f"/api/insights/market?tag={tag}"

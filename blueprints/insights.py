@@ -1,3 +1,30 @@
+"""
+The AI-brief system: turns Steam market data into a JSON payload + a
+pasteable prompt that a developer copies into ChatGPT/Claude/etc, since
+this app has no paid LLM API of its own (see blueprints/chat.py for the
+separate, non-AI in-app chat widget).
+
+Three pieces work together:
+  1. build_chatgpt_brief_payload() — gathers every data section (market
+     summary, momentum, competitors, niche opportunities, taxonomy
+     context, question_answerability, ...) into one dict. This is also
+     exposed directly as JSON via /api/insights/chatgpt-brief for anyone
+     who wants the raw data without the prompt wrapper.
+  2. build_chatgpt_prompt() — wraps that payload in instructions telling
+     the AI how to read it (what counts as strong vs. weak evidence, what
+     structure to answer in, when to say "I can't answer this"). Getting
+     the AI to be honest about data gaps rather than inventing numbers is
+     the main design goal here — see question_answerability below.
+  3. /brief-loader (chatgpt_brief_loader) — the handoff page
+     (templates/brief_loader.html) that copies the finished prompt to the
+     clipboard and opens the user's chosen AI tool in a new tab.
+
+The rest of the routes in this file (data-points, accuracy, market,
+momentum, markets, opportunities, smaller-subgenres, taxonomy,
+subgenre-children, prominence, follow-ups, concept) expose the same
+underlying market_insights.py functions individually as JSON, for any UI
+that wants one piece without the full brief.
+"""
 import json
 
 from flask import Blueprint, jsonify, render_template, request
@@ -65,6 +92,7 @@ def get_ai_tools():
 
 @insights_bp.route("/api/brief-modes")
 def get_brief_modes():
+    """List the brief modes (general/quick/competition/pricing) — see BRIEF_MODES in helpers.py."""
     return jsonify({
         "default": "general",
         "modes": [
@@ -230,6 +258,7 @@ def get_prominence():
 
 @insights_bp.route("/api/insights/follow-ups")
 def get_follow_ups():
+    """Suggested next questions shown as chips after a market summary loads."""
     genre = request.args.get("genre") or None
     tag = request.args.get("tag") or None
     question = request.args.get("q") or ""
@@ -241,6 +270,7 @@ def get_follow_ups():
 
 @insights_bp.route("/api/insights/concept", methods=["POST"])
 def concept_insight():
+    """Match a free-text game description to likely genres/tags (helpers.analyze_concept)."""
     data = request.get_json(silent=True) or {}
     description = (data.get("description") or "").strip()
     if not description:

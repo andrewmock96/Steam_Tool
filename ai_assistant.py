@@ -1,3 +1,21 @@
+"""
+A paid-Anthropic-API chat assistant with Claude tool-calling over the games
+database (search_games, get_market_overview, get_top_competitors,
+get_genre_benchmarks, get_steam_launch_checklist).
+
+NOT currently wired into the Flask app — no blueprint imports this module.
+The app's actual in-app chat (blueprints/chat.py -> market_insights.
+answer_without_llm) deliberately avoids paid API calls, by design (see
+blueprints/chat.py's docstring). The "no-cost" free-tool-handoff flow
+(blueprints/insights.py's brief system) is the other way this app gets
+LLM reasoning, by having the user paste a data payload into their own
+ChatGPT/Claude account instead of this app calling an API on their behalf.
+
+This file is left in place as a working reference for what a paid,
+in-app Claude integration would look like if that tradeoff changes later
+(needs ANTHROPIC_API_KEY set; chat() is the entry point) — but treat it as
+inactive/unused code, not part of the current request path.
+"""
 import anthropic
 import json
 import os

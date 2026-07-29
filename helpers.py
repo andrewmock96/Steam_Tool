@@ -10,6 +10,8 @@ from market_insights import (
 )
 from market_taxonomy import all_taxonomy_tags, groups_for_genre
 
+# External AI tools the brief can hand off to (see get_ai_handoff_tool()
+# and the "brief-loader" flow in blueprints/insights.py / brief_loader.html).
 AI_HANDOFF_TOOLS = {
     "chatgpt": {"label": "ChatGPT", "url": "https://chatgpt.com/"},
     "claude": {"label": "Claude", "url": "https://claude.ai/"},
@@ -24,6 +26,11 @@ AI_HANDOFF_TOOLS = {
     "deepseek": {"label": "DeepSeek", "url": "https://chat.deepseek.com/"},
 }
 DEFAULT_AI_TOOL = "claude"
+
+# Each mode's "instruction" line gets inserted into the AI prompt (see
+# build_chatgpt_prompt in blueprints/insights.py) to steer response length
+# and focus. The frontend also auto-detects one of these from keywords in
+# the user's question — see MODE_KEYWORDS in static/app.js.
 BRIEF_MODES = {
     "general": {
         "label": "Market Deep Dive",
@@ -43,11 +50,18 @@ BRIEF_MODES = {
     },
 }
 
+# Sports and Racing share several tags (Cycling, Motocross, ...), so without
+# this a game tagged both ways would double-count in each genre's totals.
 GENRE_EXCLUSIONS = {
     "Sports": ["Racing"],
     "Racing": ["Sports"],
 }
 
+# Curated per-genre subgenre tag lists shown in the sidebar/filter UI. This
+# is hand-picked (not "every tag that exists"), to keep the subgenre nav
+# focused on tags that are actually useful for browsing rather than every
+# SteamSpy community tag. See market_taxonomy.py for the deeper
+# genre -> subgenre-group -> child-tag tree used by the AI brief system.
 STEAM_SUBGENRES = {
     "Action": [
         "Shooter", "First-Person Shooter", "Third-Person Shooter", "Top-Down Shooter",
@@ -112,6 +126,10 @@ STEAM_SUBGENRES = {
 
 
 def _curated_subgenre_tags(genre=None):
+    """Known-tag allowlist used to keep free-text genre/tag inference (see
+    market_insights.infer_market_context) from matching on random SteamSpy
+    community tags — only tags we've curated into STEAM_SUBGENRES or the
+    market_taxonomy tree are eligible matches."""
     if genre:
         return set(STEAM_SUBGENRES.get(genre, [])) | set(groups_for_genre(genre).keys())
     tags = set()
@@ -130,6 +148,7 @@ def get_ai_handoff_tool(tool_id=None):
 
 
 def get_brief_mode(mode_id=None):
+    """Look up a brief mode by id, falling back to "general" for anything unrecognized."""
     key = (mode_id or "general").lower()
     if key not in BRIEF_MODES:
         key = "general"
@@ -137,6 +156,9 @@ def get_brief_mode(mode_id=None):
 
 
 def build_follow_up_prompts(question="", genre=None, tag=None, summary=None, include_concept=False):
+    """Generate the suggested-question chips shown after a market/concept
+    result loads. Built from templates rather than an LLM call, since this
+    app has no paid AI API — see blueprints/insights.py's module docstring."""
     market_name = tag or genre or (summary or {}).get("market") or "this market"
     market_label = f"{market_name} on Steam"
     prompts = [
@@ -174,6 +196,9 @@ def build_follow_up_prompts(question="", genre=None, tag=None, summary=None, inc
 
 
 def analyze_concept(games_col, description):
+    """Take a free-text game description (the "Describe Your Game Concept"
+    box) and infer a likely genre/tag market for it, then return the same
+    shape of market data a resolved genre/tag brief would get."""
     text = (description or "").strip()
     inferred = infer_market_context(
         games_col,
@@ -209,6 +234,10 @@ def analyze_concept(games_col, description):
 
 
 def build_compare_data(games_col, left_genre=None, left_tag=None, right_genre=None, right_tag=None):
+    """Summarize two markets side by side (the 'Compare Markets' feature) and
+    compute the percent deltas between them. The two summarize_market() calls
+    are independent and each does its own DB work, so they run in parallel
+    threads rather than sequentially."""
     from concurrent.futures import ThreadPoolExecutor
     with ThreadPoolExecutor(max_workers=2) as ex:
         fl = ex.submit(summarize_market, games_col, left_genre, left_tag)
@@ -261,6 +290,12 @@ def _question_mentions_release_year_count(question):
 
 
 def _build_question_answerability(question="", inferred=None, summary=None, momentum=None, competitors=None):
+    """Decide upfront whether the brief payload actually supports answering
+    the user's question, and say so explicitly in the payload itself
+    (can_answer_directly, missing_requirements, limitations) — this is what
+    the prompt instructions in build_chatgpt_prompt() point the AI at, so
+    it says "I can't answer this from the data" instead of guessing a
+    number when e.g. no genre/tag resolved from the question text."""
     normalized_question = _normalize_question(question)
     inferred = inferred or {}
     summary = summary or {}
@@ -336,6 +371,10 @@ def _build_question_answerability(question="", inferred=None, summary=None, mome
 
 
 def _niche_reliability_label(item):
+    """Sample-size-based confidence label for a niche row — thin samples
+    (Rugby, Volleyball, ...) get flagged "low" so the AI prompt knows to
+    suppress their revenue-per-game figures rather than treat a couple of
+    breakout hits as a representative average."""
     total_games = (item or {}).get("total_games") or 0
     paid_games = (item or {}).get("paid_games") or 0
     if total_games < 40 or paid_games < 30:
@@ -346,6 +385,9 @@ def _niche_reliability_label(item):
 
 
 def _recommendation_flag(reliability, confirmed_child_tag):
+    """yes/caution/no verdict for a niche — only a confirmed child tag with
+    non-low reliability clears the bar for "yes"; everything else is at
+    best a validated hypothesis, not a direct recommendation."""
     if reliability == "low":
         return "caution"
     if confirmed_child_tag:
@@ -356,6 +398,13 @@ def _recommendation_flag(reliability, confirmed_child_tag):
 
 
 def _annotate_niche_candidates(items, confirmed_children=None):
+    """Attach the reliability/confidence framework (data_reliability,
+    confirmed_child_tag, market_relationship, use_for_recommendation,
+    reliability_note, revenue_metric_guidance) to a list of niche/market
+    rows, so the AI prompt has a consistent way to judge every niche list
+    in the payload (smaller_subgenres, opportunities, and — since these
+    otherwise lacked it — doing_well/less_prominent) rather than treating
+    some as more trustworthy just because they happen to carry metadata."""
     confirmed = set(confirmed_children or [])
     annotated = []
     for item in items or []:
@@ -408,6 +457,12 @@ def _annotate_niche_candidates(items, confirmed_children=None):
 
 
 def _build_brief_diagnostics(summary=None, momentum=None, smaller=None, opportunities=None, taxonomy=None, prominence=None):
+    """Build the brief_diagnostics section: decision rules, red flags, and
+    the annotated niche_validation tables the AI prompt is told to lean on.
+    This is where per-payload red flags get raised (thin taxonomy support,
+    low-confidence momentum, suspicious SOM legacy-capture figures) so the
+    prompt instructions in blueprints/insights.py can point the AI at them
+    instead of the AI having to infer data quality on its own."""
     diagnostics = {
         "decision_rules": [
             "Prefer outlier-adjusted per-game benchmarks over raw TAM/SAM when judging indie feasibility.",

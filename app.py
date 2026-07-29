@@ -1,3 +1,19 @@
+"""
+Flask application entry point.
+
+This file only wires up the app: all actual routes live in blueprints/,
+split by concern —
+  pages        static page routes (index, brief loader page, etc.)
+  games        single-game lookups and the paginated game grid API
+  market       genre/tag market browsing, compare, taxonomy nav
+  insights     the AI-brief pipeline (payload building, prompt assembly,
+               question-answerability checks) — see blueprints/insights.py
+  chat         the in-app chat widget
+  coming_soon  the "Coming Soon" future-competitors browsing UI
+
+Run directly with `python app.py` for local dev (Flask's debug reloader).
+In production this would be served via a WSGI server instead of app.run().
+"""
 from flask import Flask
 
 from blueprints.chat import chat_bp

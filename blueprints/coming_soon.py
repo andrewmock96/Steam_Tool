@@ -1,3 +1,14 @@
+"""
+"Coming Soon" browsing: genre/subgenre navigation and paginated listing for
+games currently marked coming_soon on Steam.
+
+Reads from the `upcoming_games` collection, which is a point-in-time
+snapshot table populated by scrape_upcoming_releases.py (run daily via
+Windows Task Scheduler — see run_daily_upcoming_sync.bat), not computed
+live from the main `games` collection. The route shapes here intentionally
+mirror the regular genre/subgenre endpoints in blueprints/market.py so the
+frontend sidebar can reuse the same nav-tree rendering code for both.
+"""
 from flask import Blueprint, jsonify, request
 
 from db import upcoming_games_col

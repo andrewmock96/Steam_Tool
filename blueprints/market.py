@@ -1,3 +1,12 @@
+"""
+Market-sizing routes: TAM/SAM/SOM estimates, competitor lists, and
+side-by-side market comparisons for a genre or tag.
+
+The heavy lifting (owner/revenue estimation, outlier trimming, confidence
+scoring) lives in market_insights.summarize_market() — these routes are
+thin wrappers that reshape its output into the JSON the frontend charts
+expect. See market_insights.py for the actual TAM/SAM/SOM methodology.
+"""
 from flask import Blueprint, jsonify, request
 
 from db import games_col, upcoming_games_col
@@ -104,6 +113,7 @@ def get_upcoming_competitors():
 
 @market_bp.route("/api/insights/compare")
 def compare_markets():
+    """Side-by-side market summary for two genres/tags (the 'Compare Markets' UI)."""
     left_type = request.args.get("left_type", "genre")
     left_value = request.args.get("left") or ""
     left_genre = left_value if left_type == "genre" else request.args.get("left_genre") or None

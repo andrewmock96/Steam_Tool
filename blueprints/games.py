@@ -1,3 +1,14 @@
+"""
+Per-game lookups, the paginated/filterable game grid, CSV export, the home
+screen's player-trend chart data, and genre/subgenre browsing.
+
+"Virtual tags" show up throughout this file (is_virtual_tag,
+build_virtual_tag_query, game_matches_virtual_tag) — these are tags that
+can't be matched with a simple MongoDB query because they're derived from
+combinations of real tags/fields (see virtual_tags.py). Regular tags get a
+fast indexed Mongo query; virtual tags fetch a candidate set and filter it
+in Python instead.
+"""
 import time as _time
 
 from flask import Blueprint, Response, jsonify, request
@@ -154,6 +165,9 @@ def _sorted_games_pipeline(match_query, page, limit, sort_by="revenue"):
 
 
 def _sort_virtual_games(games, sort_by):
+    """In-Python equivalent of _sorted_games_pipeline's $sort, for virtual-tag
+    result sets that were already pulled out of Mongo and filtered in Python
+    (so there's no query left to attach a database-level sort to)."""
     def revenue_key(game):
         return (game.get("estimated_revenue") or {}).get("low", 0)
 
@@ -182,6 +196,9 @@ def _sort_virtual_games(games, sort_by):
 
 
 def _virtual_tag_results(tag, genre, page, limit, sort_by, filters):
+    """Fetch, filter, sort, and paginate a virtual tag's matching games —
+    the whole set has to be pulled from Mongo before filtering/paging can
+    happen, since the match logic can't be expressed as a Mongo query."""
     query = build_virtual_tag_query(tag, genre=genre or None) or {"delisted": {"$ne": True}}
     query.update(filters)
     docs = list(games_col.find(query, CARD_FIELDS))
@@ -231,6 +248,7 @@ def export_genre_csv(genre):
 
 @games_bp.route("/api/games/genre/<genre>")
 def get_games_by_genre(genre):
+    """Paginated, sortable, filterable game grid for a whole genre (the main market browsing view)."""
     page    = max(0, int(request.args.get("page", 0)))
     limit   = min(150, max(1, int(request.args.get("limit", 50))))
     sort_by = request.args.get("sort", "revenue")
@@ -244,6 +262,8 @@ def get_games_by_genre(genre):
 
 @games_bp.route("/api/games/tag/<tag>")
 def get_games_by_tag(tag):
+    """Same as get_games_by_genre but scoped to a tag/subgenre, with the
+    virtual-tag fallback path for tags that aren't a plain field match."""
     genre   = request.args.get("genre", "")
     page    = max(0, int(request.args.get("page", 0)))
     limit   = min(150, max(1, int(request.args.get("limit", 50))))
@@ -264,7 +284,13 @@ def get_games_by_tag(tag):
 
 @games_bp.route("/api/overview")
 def get_overview():
-    """Genre player trend data from daily snapshots for the home screen chart."""
+    """Genre player trend data from daily snapshots for the home screen chart.
+
+    Returns the full snapshot history (no date cutoff) — genre_snapshots is
+    written once a day, so this stays small for a long time. If it grows
+    large enough to matter, cap it here or add a time-range param rather
+    than silently truncating what the frontend requests.
+    """
     from db import db as mongo_db
 
     genres = ["Action", "Adventure", "Casual", "Indie", "RPG",

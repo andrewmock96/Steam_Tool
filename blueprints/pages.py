@@ -1,3 +1,4 @@
+"""Top-level page/static routes: the main app shell, branding assets, and a health check."""
 from flask import Blueprint, jsonify, render_template, send_from_directory
 
 from db import games_col

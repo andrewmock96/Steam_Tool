@@ -1,3 +1,18 @@
+"""
+Steam Store + SteamSpy API clients, and parse_game() — the single function
+that turns their raw responses into this app's `games` collection schema.
+
+Steam's own store API has no official sales/owner data, so every
+owner/revenue figure in this app traces back through SteamSpy's modeled
+"owners" range (see parse_game's revenue math below) — that's why
+SOURCE_CONFIDENCE in market_insights.py rates sales estimates lower
+confidence than metadata/reviews, which come straight from Steam.
+
+parse_game() is called from many places (blueprints/games.py on cache
+miss, refresh_games.py, backfill_top10k_market_data.py, expand_continuous.py,
+...) — it's the one place the full document shape is defined, so a new
+field needs to be added here for every fetch path to pick it up.
+"""
 import requests
 import time
 
@@ -10,6 +25,12 @@ STEAM_GENRES = [
     "Racing", "RPG", "Simulation", "Sports", "Strategy", "Early Access"
 ]
 
+# NOTE: this is a near-duplicate of helpers.STEAM_SUBGENRES (used by the
+# Flask app's sidebar/filter routes) — they've drifted slightly out of sync
+# (e.g. Racing here includes "Bikes", helpers.py's doesn't). This copy is
+# only used by the standalone scraping scripts below/pipeline.py, which
+# don't import from blueprints/helpers.py. Worth consolidating into one
+# shared source if the two lists need to stay in lockstep.
 STEAM_SUBGENRES = {
     "Action": [
         "Shooter", "First-Person Shooter", "Third-Person Shooter", "Top-Down Shooter",
@@ -204,7 +225,14 @@ def parse_game(steam_data, spy_data):
     if avg_price == 0:
         avg_price = current_price
 
-    # Steam's tiered revenue share: 30% up to $10M, 25% to $50M, 20% above
+    # Revenue model: estimated_owners (from SteamSpy) x avg_price = gross
+    # revenue, then apply Steam's tiered revenue split (Steam takes 30% up
+    # to $10M lifetime gross, 25% of the next $40M, 20% above that — this
+    # function computes the DEVELOPER's share, i.e. gross minus Steam's cut,
+    # not gross revenue itself). avg_price blends initial/current/historical-low
+    # price (weighted 35/35/30) when ITAD historical-low data is available
+    # (see enrich_pricing.py), since list price alone overstates what most
+    # buyers actually paid — most units sell during a discount, not at launch.
     def _steam_dev_share(gross):
         if gross <= 10_000_000:
             return gross * 0.70

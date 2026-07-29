@@ -1,3 +1,19 @@
+/* ============================================================
+   Going Indie — main stylesheet for templates/index.html.
+   Plain CSS, no preprocessor/build step. Dark theme throughout; colors
+   and spacing tokens are defined once under Reset & Variables (:root)
+   and referenced everywhere else via var(--name) rather than repeated
+   literals, so a palette/spacing change only has to happen in one place.
+   Sections below are ordered roughly top-to-bottom as they appear on the
+   page (top bar -> sidebar -> hero/chart -> market browsing -> game
+   cards/detail panel -> chat widget), with responsive overrides for
+   tablet/mobile at the very end.
+
+   templates/brief_loader.html is a separate standalone page and keeps its
+   own inline <style> block instead of using this file — see that file's
+   own CSS variables (same dark-theme palette, defined independently).
+   ============================================================ */
+
 /* ─── Fonts ─── */
 @font-face {
     font-family: 'Visby CF';
@@ -776,6 +792,30 @@ body {
     color: var(--text-muted);
     font-size: 0.78rem;
     line-height: 1.5;
+}
+
+.concept-redirect-hint {
+    margin: 0 0 10px;
+    padding: 9px 12px;
+    background: rgba(23, 129, 255, 0.1);
+    border: 1px solid rgba(23, 129, 255, 0.25);
+    border-radius: 10px;
+    color: #b9d9ff;
+    font-size: 0.78rem;
+    line-height: 1.5;
+}
+
+.concept-redirect-hint.hidden {
+    display: none;
+}
+
+.concept-card.pulse-attention {
+    animation: pulseAttention 1.6s ease-in-out infinite;
+}
+
+@keyframes pulseAttention {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(23, 129, 255, 0.4); }
+    50% { box-shadow: 0 0 0 6px rgba(23, 129, 255, 0); }
 }
 
 .concept-input {

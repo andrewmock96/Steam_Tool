@@ -1,3 +1,24 @@
+"""
+Hand-curated genre -> subgenre-group -> child-tag taxonomy.
+
+This is the "confirmed" side of the AI brief's confidence framework: a tag
+that shows up in here as a genre's child is treated as a real, defined
+niche (confirmed_child_tag: true in helpers._annotate_niche_candidates);
+anything else is "adjacent_or_unconfirmed" — a tag that correlates with a
+market but isn't a verified subgenre of it. It's necessarily incomplete
+(hundreds of SteamSpy community tags exist; only the useful/common ones are
+curated here), which is exactly why most niche recommendations in a brief
+carry the "adjacent, not confirmed" caveat — expanding this tree directly
+reduces how often that caveat has to apply.
+
+SUBGENRE_CHILDREN: subgenre -> its narrower child tags (e.g. "Shooter" ->
+["First-Person Shooter", "Battle Royale", ...]). Reused across multiple
+genres below since a subgenre like "Horror" can appear under more than one
+genre grouping.
+
+GENRE_SUBGENRE_GROUPS: top-level genre -> named groups of subgenres, for
+building the sidebar's genre -> subgenre -> child-tag nav tree.
+"""
 SUBGENRE_CHILDREN = {
     "Shooter": [
         "First-Person Shooter",
@@ -203,6 +224,9 @@ GENRE_SUBGENRE_GROUPS = {
 
 
 def all_taxonomy_tags():
+    """Every tag name that appears anywhere in the taxonomy (subgenre keys,
+    child tags, and group names) — used as the "known tag" allowlist for
+    free-text genre/tag inference (see market_insights.infer_market_context)."""
     tags = set(SUBGENRE_CHILDREN)
     for children in SUBGENRE_CHILDREN.values():
         tags.update(children)
@@ -214,10 +238,12 @@ def all_taxonomy_tags():
 
 
 def children_for_subgenre(subgenre):
+    """Child tags for a subgenre, or [] if it's a leaf (no further children defined)."""
     return SUBGENRE_CHILDREN.get(subgenre, [])
 
 
 def groups_for_genre(genre):
+    """Named subgenre groups for a genre, or {} if the genre isn't in the taxonomy."""
     return GENRE_SUBGENRE_GROUPS.get(genre, {})
 
 

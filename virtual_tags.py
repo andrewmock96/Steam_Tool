@@ -1,12 +1,47 @@
+"""
+"Virtual tags": subgenre tags that don't exist as a clean SteamSpy
+community tag, or whose plain tag doesn't reliably mean what the label
+implies — so they're computed from a rule (title patterns, genre,
+include/exclude tag combinations) instead of a simple `tags` field match.
+
+Example problems this solves:
+  - "First-Person Shooter" isn't itself a common SteamSpy tag; games are
+    tagged "Shooter" + "First-Person" separately, so a plain tag query for
+    "First-Person Shooter" would return almost nothing.
+  - "Cycling" as a raw tag catches management sims, delivery games, and
+    unrelated titles that happen to share the tag — the rule instead
+    matches by title patterns (real cycling game names) and excludes
+    obvious false positives (tycoon/manager games, motorsport titles).
+
+Every consumer that needs to match games against a tag should check
+is_virtual_tag() first: if true, use build_virtual_tag_query() to fetch a
+candidate set from Mongo, then filter it in Python with
+game_matches_virtual_tag() (the match logic here — regex title patterns,
+tag exclusions — can't be expressed as a single Mongo query). If false,
+it's just a normal tag and build_tag_matcher()/a plain `tags` filter works.
+"""
 import re
 
 
+# Plain-tag synonyms — a search for "First-Person Shooter" should also match
+# games only tagged "Shooter" once combined with other signals; see
+# build_tag_matcher, which is for REAL tags (not virtual ones — virtual tags
+# use VIRTUAL_TAG_RULES's include_any_tags instead).
 TAG_ALIASES = {
     "First-Person Shooter": ["Shooter"],
     "Bikes": ["Cycling"],
 }
 
 
+# Rule shape (all keys optional except "genre"):
+#   genre                    default genre to scope the query to
+#   include_any_tags         game matches if it has ANY of these tags
+#   include_title_patterns   game matches if title matches ANY of these regexes
+#   exclude_tags              game is excluded if it has ALL of these tags
+#   exclude_any_tags          game is excluded if it has ANY of these tags
+#   exclude_title_patterns    game is excluded if title matches ANY of these regexes
+# See game_matches_virtual_tag() for how these combine per-tag (some tags,
+# like Motorsport, have extra bespoke logic beyond the generic rule fields).
 VIRTUAL_TAG_RULES = {
     "First-Person Shooter": {
         "genre": "Action",
@@ -95,15 +130,18 @@ VIRTUAL_TAG_RULES["Bikes"] = VIRTUAL_TAG_RULES["Cycling"]
 
 
 def is_virtual_tag(tag):
+    """True if this tag needs the virtual-tag rule/filter path instead of a plain Mongo tag query."""
     return tag in VIRTUAL_TAG_RULES
 
 
 def build_tag_matcher(tag):
+    """Case-insensitive exact-match $in query for a real tag, including any TAG_ALIASES."""
     tags = [tag] + TAG_ALIASES.get(tag, [])
     return {"$in": [re.compile(f"^{re.escape(value)}$", re.IGNORECASE) for value in tags]}
 
 
 def _compile_patterns(patterns):
+    """Combine a list of regex fragments into one case-insensitive alternation pattern."""
     if not patterns:
         return None
     return re.compile("|".join(patterns), re.IGNORECASE)
@@ -118,6 +156,11 @@ def _title_matches(title, patterns):
 
 
 def game_matches_virtual_tag(game, tag):
+    """Python-side (not Mongo-query-side) check for whether a game document
+    actually satisfies a virtual tag's rule. Called after
+    build_virtual_tag_query() has already narrowed the candidate set from
+    Mongo — this does the part of the matching that can't be expressed as a
+    query (regex title matching, tag-combination logic)."""
     rule = VIRTUAL_TAG_RULES.get(tag)
     if not rule:
         return False
@@ -170,6 +213,13 @@ def game_matches_virtual_tag(game, tag):
 
 
 def build_virtual_tag_query(tag, genre=None):
+    """Best-effort Mongo query to narrow candidates for a virtual tag before
+    the precise Python-side filter (game_matches_virtual_tag) runs. This is
+    intentionally a superset — it can't perfectly express the rule (e.g.
+    include_title_patterns regex can be pushed into the query, but the
+    per-tag bespoke logic in game_matches_virtual_tag can't), so results
+    still need the Python filter applied afterward. Returns None for a
+    non-virtual tag, signaling callers to use the normal tag-query path."""
     rule = VIRTUAL_TAG_RULES.get(tag)
     if not rule:
         return None
