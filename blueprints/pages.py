@@ -16,9 +16,9 @@ def branding_file(filename):
     return send_from_directory("branding", filename)
 
 
+# Quick check that the server is running and database is connected.
 @pages_bp.route("/api/health")
 def health():
-    """Quick check that the server is running and database is connected."""
     game_count = games_col.count_documents({})
     return jsonify({
         "status": "ok",

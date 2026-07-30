@@ -57,8 +57,8 @@ if not ITAD_API_KEY:
     sys.exit(1)
 
 
+# Resolve Steam appids -> ITAD game IDs. Returns {appid: itad_id or None}.
 def lookup_itad_ids(app_ids):
-    """Resolve Steam appids -> ITAD game IDs. Returns {appid: itad_id or None}."""
     body = [f"app/{aid}" for aid in app_ids]
     try:
         r = requests.post(f"{ITAD_URL}/lookup/id/shop/61/v1", params={"key": ITAD_API_KEY}, json=body, timeout=20)
@@ -76,8 +76,8 @@ def lookup_itad_ids(app_ids):
         return {}
 
 
+# Fetch historical low prices for a batch of ITAD ids. Returns {itad_id: entry}.
 def fetch_historical_lows(itad_ids):
-    """Fetch historical low prices for a batch of ITAD ids. Returns {itad_id: entry}."""
     if not itad_ids:
         return {}
     try:
@@ -96,6 +96,10 @@ def fetch_historical_lows(itad_ids):
         return {}
 
 
+# Entry point: batch-lookup ITAD ids for un-enriched games, fetch their
+# historical low prices, and write steam_historical_low (only when the low
+# is confirmed to be from Steam itself — see module docstring) onto
+# price_history.
 def enrich(limit=3000, all_games=False, refresh=False):
     match = {"delisted": {"$ne": True}}
     if not refresh:

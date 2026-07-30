@@ -19,10 +19,6 @@ db = client["steam_tool"]
 # see steam_api.py's parse_game() for the full schema written into this).
 games_col = db["games"]
 
-# Precomputed per-genre market rollups (used by the "Player Trends" home
-# chart and other summary views that don't need to scan `games` directly).
-genre_aggregates_col = db["genre_aggregates"]
-
 # Snapshots of currently coming-soon games, tracked over time so we can
 # answer "how long was this store page live before launch" — see
 # scrape_upcoming_releases.py, which is what writes to this collection.

@@ -223,10 +223,10 @@ GENRE_SUBGENRE_GROUPS = {
 }
 
 
+# Every tag name that appears anywhere in the taxonomy (subgenre keys,
+# child tags, and group names) — used as the "known tag" allowlist for
+# free-text genre/tag inference (see market_insights.infer_market_context).
 def all_taxonomy_tags():
-    """Every tag name that appears anywhere in the taxonomy (subgenre keys,
-    child tags, and group names) — used as the "known tag" allowlist for
-    free-text genre/tag inference (see market_insights.infer_market_context)."""
     tags = set(SUBGENRE_CHILDREN)
     for children in SUBGENRE_CHILDREN.values():
         tags.update(children)
@@ -237,27 +237,26 @@ def all_taxonomy_tags():
     return tags
 
 
+# Child tags for a subgenre, or [] if it's a leaf (no further children defined).
 def children_for_subgenre(subgenre):
-    """Child tags for a subgenre, or [] if it's a leaf (no further children defined)."""
     return SUBGENRE_CHILDREN.get(subgenre, [])
 
 
+# Named subgenre groups for a genre, or {} if the genre isn't in the taxonomy.
 def groups_for_genre(genre):
-    """Named subgenre groups for a genre, or {} if the genre isn't in the taxonomy."""
     return GENRE_SUBGENRE_GROUPS.get(genre, {})
 
 
+# Best-guess parent genre for a subgenre/child tag, e.g. 'Metroidvania' -> 'Action'.
+#
+# Used to scope cross-market sections (smaller_subgenres, opportunities,
+# prominence) near a resolved tag when no genre was given alongside it —
+# without this, those sections default to scanning every genre, surfacing
+# thematically unrelated niches (Rugby, Cricket, ...) next to a brief about
+# a specific subgenre. A tag can appear under multiple genres (e.g.
+# Metroidvania sits under both Action and Indie); the first match is used
+# as a reasonable single scope, not a claim of exclusive ownership.
 def genre_for_tag(tag):
-    """Best-guess parent genre for a subgenre/child tag, e.g. 'Metroidvania' -> 'Action'.
-
-    Used to scope cross-market sections (smaller_subgenres, opportunities,
-    prominence) near a resolved tag when no genre was given alongside it —
-    without this, those sections default to scanning every genre, surfacing
-    thematically unrelated niches (Rugby, Cricket, ...) next to a brief
-    about a specific subgenre. A tag can appear under multiple genres (e.g.
-    Metroidvania sits under both Action and Indie); the first match is used
-    as a reasonable single scope, not a claim of exclusive ownership.
-    """
     if not tag:
         return None
     for genre, groups in GENRE_SUBGENRE_GROUPS.items():

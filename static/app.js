@@ -24,6 +24,7 @@ const menuToggle = document.getElementById("menu-toggle");
 const sidebar    = document.querySelector(".sidebar");
 const backdrop   = document.getElementById("sidebar-backdrop");
 
+// Close the mobile slide-out sidebar and reset the hamburger/backdrop state.
 function closeSidebar() {
     sidebar.classList.remove("open");
     backdrop.classList.add("hidden");
@@ -61,6 +62,8 @@ fetch("/api/taxonomy")
     })
     .catch(() => {});
 
+// Fill the compare panel's subgenre dropdown with the chosen genre's subgenres
+// (plus their children), used when comparing against a genre's subgenre.
 function populateCompareSubOptions(genre) {
     const subSelect = document.getElementById("compare-sub-value");
     const controls  = document.getElementById("compare-controls");
@@ -83,6 +86,7 @@ function populateCompareSubOptions(genre) {
     controls.style.gridTemplateColumns = "minmax(0,1fr) minmax(0,1fr) auto";
 }
 
+// Reset the compare panel's value dropdown to the top-level genre list.
 function populateCompareValueOptions() {
     const valueSelect = document.getElementById("compare-value");
     const subSelect   = document.getElementById("compare-sub-value");
@@ -127,6 +131,7 @@ const GENRE_COLORS = {
     "Racing":     "#fbbf24"
 };
 
+// Fetch genre totals + trend history for the homepage chart and render it.
 async function loadOverview() {
     try {
         const res  = await fetch("/api/overview");
@@ -137,6 +142,8 @@ async function loadOverview() {
     }
 }
 
+// Build (or rebuild) the Chart.js player-count-by-genre line chart, plus its
+// subtitle and legend, from the raw per-genre trend points.
 function renderGenreChart(genres, trend) {
     const canvas = document.getElementById("chart-genre");
     if (!canvas) return;
@@ -249,6 +256,8 @@ function renderGenreChart(genres, trend) {
     buildChartLegend(genres, datasets);
 }
 
+// Render clickable legend chips under the chart that toggle a genre's
+// dataset visibility (Chart.js's built-in legend is disabled in favor of this).
 function buildChartLegend(genres, datasets) {
     const container = document.getElementById("chart-legend");
     if (!container) return;
@@ -287,6 +296,7 @@ const BRIEF_MODE_STORAGE_KEY = "goingIndie.briefMode";
 let activeCompareState = null;
 let latestConceptAnalysis = null;
 
+// Read the user's saved AI-tool preference (ChatGPT/Claude/etc.) from localStorage.
 function readPreferredAiTool() {
     try {
         return localStorage.getItem(AI_TOOL_STORAGE_KEY);
@@ -295,6 +305,7 @@ function readPreferredAiTool() {
     }
 }
 
+// Persist the user's AI-tool preference to localStorage.
 function savePreferredAiTool(value) {
     try {
         localStorage.setItem(AI_TOOL_STORAGE_KEY, value);
@@ -303,15 +314,19 @@ function savePreferredAiTool(value) {
     }
 }
 
+// Resolve the active AI tool value: saved preference, else the dropdown's
+// current value, else "claude" as the hard default.
 function getPreferredAiTool() {
     return readPreferredAiTool() || preferredAiTool?.value || "claude";
 }
 
+// Get the human-readable label (e.g. "ChatGPT") for the currently selected AI tool.
 function getPreferredAiLabel() {
     const selected = preferredAiTool?.selectedOptions?.[0];
     return selected?.textContent || "AI";
 }
 
+// Read the user's saved brief mode (general/quick/competition/pricing) from localStorage.
 function readBriefMode() {
     try {
         return localStorage.getItem(BRIEF_MODE_STORAGE_KEY);
@@ -320,6 +335,7 @@ function readBriefMode() {
     }
 }
 
+// Persist the user's brief mode selection to localStorage.
 function saveBriefMode(value) {
     try {
         localStorage.setItem(BRIEF_MODE_STORAGE_KEY, value);
@@ -328,6 +344,7 @@ function saveBriefMode(value) {
     }
 }
 
+// Resolve the active brief mode value.
 function getBriefMode() {
     // The dropdown is the live source of truth: it's seeded from the saved
     // preference on load, then kept current by auto-detection or a manual
@@ -354,6 +371,8 @@ const MODE_KEYWORDS = {
     competition: ["competitor", "competitors", "compete", "competition", "rival", "benchmark", "similar games", "who else"],
 };
 
+// Guess a brief mode from free-typed question text via MODE_KEYWORDS, or
+// null if nothing matches (caller then falls back to the saved/default mode).
 function detectBriefMode(text) {
     const lowered = (text || "").toLowerCase();
     if (!lowered.trim()) return null;
@@ -363,6 +382,8 @@ function detectBriefMode(text) {
     return null;
 }
 
+// Update the mode-description hint text and the "auto-detected" badge to
+// match the brief-mode dropdown's current value.
 function updateBriefModeHint(isAuto = false) {
     const hint = document.getElementById("brief-mode-hint");
     const badge = document.getElementById("brief-mode-auto-badge");
@@ -371,6 +392,7 @@ function updateBriefModeHint(isAuto = false) {
     if (badge) badge.classList.toggle("hidden", !isAuto);
 }
 
+// Seed the AI-tool dropdown from the saved preference on page load.
 function syncPreferredAiTool() {
     if (!preferredAiTool) return;
     const saved = readPreferredAiTool();
@@ -397,6 +419,9 @@ briefModeSelect?.addEventListener("change", () => {
     updateBriefModeHint(false);
 });
 
+// Handle the hero search box's "Ask AI" action: resolve the question (typed
+// or suggested) to a market/mode context, then hand off to the AI brief flow
+// (or redirect to the Concept Analyzer for questions that need one).
 async function sendHeroMessage() {
     const message = (isSuggestedQuestion ? currentSuggestedQuestion : heroInput.value).trim();
     if (!message) return;
@@ -447,6 +472,8 @@ async function sendHeroMessage() {
     }
 }
 
+// Scroll to and highlight the Concept Analyzer card, with a hint explaining
+// why the original question was redirected there instead of answered directly.
 function redirectToConceptAnalyzer(originalQuestion) {
     const card = document.querySelector(".concept-card");
     const hint = document.getElementById("concept-redirect-hint");
@@ -517,6 +544,8 @@ let isSuggestedQuestion = false;
 let currentSuggestedQuestion = "";
 let suggestionQueue = [];
 
+// Shuffle a fresh copy of SUGGESTIONS into the queue, avoiding an immediate
+// repeat of whatever suggestion is currently showing.
 function refillSuggestionQueue() {
     suggestionQueue = [...SUGGESTIONS];
 
@@ -530,11 +559,14 @@ function refillSuggestionQueue() {
     }
 }
 
+// Pop the next suggestion off the queue (refilling it first if empty) and
+// start typing it into the hero input.
 function setRandomSuggestion() {
     if (suggestionQueue.length === 0) refillSuggestionQueue();
     startSuggestedQuestion(suggestionQueue.shift());
 }
 
+// Type out a suggested question into the hero input one character at a time.
 function startSuggestedQuestion(suggestion) {
     clearInterval(suggestionTimer);
     heroInput.value = "";
@@ -557,6 +589,7 @@ function startSuggestedQuestion(suggestion) {
     }, 26);
 }
 
+// Stop the typewriter effect and clear the input if it still holds suggested text.
 function clearSuggestedQuestion() {
     clearInterval(suggestionTimer);
     if (isSuggestedQuestion) heroInput.value = "";
@@ -564,6 +597,8 @@ function clearSuggestedQuestion() {
     heroInput.classList.remove("suggested");
 }
 
+// Stop the typewriter effect but keep the current text in the input (used
+// when the user is about to submit the suggested question as-is).
 function acceptSuggestedQuestion() {
     clearInterval(suggestionTimer);
     isSuggestedQuestion = false;
@@ -644,6 +679,8 @@ document.getElementById("search-input").addEventListener("keydown", (e) => {
 let activeGenre = null;
 let activeBriefContext = {};
 
+// Reset the sidebar genre selection and any market/compare/follow-up state
+// tied to it, so a new genre or the home view can start clean.
 function clearActiveGenre() {
     document.querySelectorAll(".genre-item").forEach(i => i.classList.remove("active"));
     const existing = document.querySelector(".subgenre-nav");
@@ -689,6 +726,9 @@ document.querySelectorAll(".genre-item").forEach(item => {
     });
 });
 
+// Build the sidebar's subgenre tree under a genre: top-level subgenre rows
+// (those not already listed as another subgenre's child) each with an
+// optional expand toggle that lazy-loads its own children.
 function loadSubgenres(genre, afterElement) {
     const nav = document.createElement("div");
     nav.className = "subgenre-nav";
@@ -764,6 +804,9 @@ function loadSubgenres(genre, afterElement) {
         });
 }
 
+// Lazy-load and render a subgenre group's child subgenres (fetched once per
+// group, cached via group.dataset.childrenLoaded); removes the toggle
+// entirely if it turns out there are no children.
 async function loadChildSubgenres(group, genre, parentTag, toggleBtn = null) {
     const toggle = toggleBtn || group.querySelector(".subgenre-expand-btn");
     const wrap = group.querySelector(".subgenre-children");
@@ -822,10 +865,13 @@ let comingSoonFilter = { genre: null, tag: null };
 let comingSoonPage = 0;
 const COMING_SOON_LIMIT = 30;
 
+// Deselect any active item in the Coming Soon sidebar tree.
 function clearActiveComingSoonNav() {
     document.querySelectorAll(".cs-nav-item").forEach(el => el.classList.remove("active"));
 }
 
+// Enter the Coming Soon browsing view: reset its filter/page state, build
+// the genre tree, and load the unfiltered game list.
 function openComingSoon(afterElement) {
     comingSoonFilter = { genre: null, tag: null };
     comingSoonPage = 0;
@@ -838,6 +884,8 @@ function openComingSoon(afterElement) {
     fetchComingSoonGames("Coming Soon — All Genres");
 }
 
+// Build the Coming Soon sidebar's genre-level tree (each genre eagerly loads
+// its own subgenres so the toggle arrow can reflect whether any exist).
 function loadComingSoonTree(afterElement) {
     const nav = document.createElement("div");
     nav.className = "subgenre-nav coming-soon-tree";
@@ -907,6 +955,9 @@ function loadComingSoonTree(afterElement) {
         });
 }
 
+// Lazy-load and render a Coming Soon genre's subgenre level, one deeper
+// than loadComingSoonTree — each subgenre row may itself expand further
+// via loadComingSoonChildren.
 async function loadComingSoonSubgenres(group, genre, toggleBtn = null) {
     const wrap = group.querySelector(".subgenre-children");
     if (!wrap || group.dataset.childrenLoaded) return;
@@ -988,6 +1039,8 @@ async function loadComingSoonSubgenres(group, genre, toggleBtn = null) {
     }
 }
 
+// Lazy-load and render the deepest Coming Soon tree level (children of a
+// subgenre) — these are leaf nodes with no further expansion.
 async function loadComingSoonChildren(group, genre, parentTag, toggleBtn = null) {
     const wrap = group.querySelector(".subgenre-children");
     if (!wrap || group.dataset.childrenLoaded) return;
@@ -1034,6 +1087,8 @@ async function loadComingSoonChildren(group, genre, parentTag, toggleBtn = null)
     }
 }
 
+// Fetch and render one page of Coming Soon games for the current
+// genre/tag filter, then rebuild pagination for the new total.
 async function fetchComingSoonGames(title) {
     document.getElementById("results-title").textContent = title;
     document.getElementById("results-header").classList.remove("hidden");
@@ -1076,6 +1131,7 @@ async function fetchComingSoonGames(title) {
     }
 }
 
+// Render Prev/page-number/Next controls for the Coming Soon results list.
 function renderComingSoonPagination(total, title) {
     const pager = document.getElementById("pagination");
     pager.innerHTML = "";
@@ -1113,6 +1169,9 @@ function renderComingSoonPagination(total, title) {
 // Market Overview
 // ----------------------------
 
+// Build the title/primary-stat/secondary-card content for the market panel,
+// varying by depth (genre/subgenre/child) since TAM only makes sense at the
+// genre level and narrower levels show SAM/realistic-capture figures instead.
 function marketDepthConfig(level, data, name, parentGenre = "", parentTag = "") {
     const hasChildren = arguments[5] || false;
     const sampleSize = data.sample_notes?.paid_revenue_sample_size || data.paid_games || 0;
@@ -1230,6 +1289,8 @@ function marketDepthConfig(level, data, name, parentGenre = "", parentTag = "") 
     };
 }
 
+// Render the market grid (primary card + secondary stat cards) from
+// marketDepthConfig's output.
 function renderMarketSummary(data, context) {
     const container = document.getElementById("market-grid");
     if (!container || !data) return;
@@ -1258,6 +1319,8 @@ function renderMarketSummary(data, context) {
     `;
 }
 
+// Fetch and render the market panel (genre or subgenre/tag depending on
+// `options.level`), then refresh follow-up prompts and the upcoming-releases strip.
 async function fetchMarketOverview(name, options = {}) {
     const {
         level = "genre",
@@ -1295,6 +1358,7 @@ async function fetchMarketOverview(name, options = {}) {
     }
 }
 
+// Fetch and render the "Upcoming in this market" strip under the market panel.
 async function loadUpcoming(genre, tag) {
     const section = document.getElementById("upcoming-section");
     const grid = document.getElementById("upcoming-grid");
@@ -1329,6 +1393,7 @@ async function loadUpcoming(genre, tag) {
     }
 }
 
+// Build a clickable card (opens the Steam store page) for one upcoming/coming-soon game.
 function buildUpcomingCard(game) {
     const price = game.price_current_usd > 0 ? `$${game.price_current_usd.toFixed(2)}` : "";
     const dev = (game.developer || [])[0] || "";
@@ -1358,6 +1423,9 @@ function buildUpcomingCard(game) {
 // AI Handoff
 // ----------------------------
 
+// Build the brief-loader URL from the active market/compare/concept context
+// and open it in a new tab. Returns whether the tab actually opened (false
+// means the popup was blocked and the caller should prompt the user).
 function copyChatGptBrief(userQuestion = "", contextOverride = null) {
     const params = new URLSearchParams();
     // A suggested question's own genre/tag (when it has one) takes priority
@@ -1407,6 +1475,8 @@ function copyChatGptBrief(userQuestion = "", contextOverride = null) {
     return false;
 }
 
+// Return browser-specific instructions for allowing pop-ups on this site,
+// detected from the user agent string.
 function getPopupPermissionSteps() {
     const ua = navigator.userAgent;
     if (ua.includes("Edg/")) {
@@ -1421,6 +1491,8 @@ function getPopupPermissionSteps() {
     return "Open your browser's site settings for this page and allow pop-ups and redirects.";
 }
 
+// Show a dismissible toast explaining that the loader tab was blocked, with
+// browser-specific steps to allow it and a retry button.
 function showPopupBlockedNotice(retry) {
     document.getElementById("popup-blocked-toast")?.remove();
 
@@ -1450,6 +1522,8 @@ function showPopupBlockedNotice(retry) {
     });
 }
 
+// Copy text to the clipboard, preferring the modern Clipboard API and
+// falling back to a hidden-textarea + execCommand("copy") for older/insecure contexts.
 async function writeClipboard(text) {
     if (navigator.clipboard && window.isSecureContext) {
         try {
@@ -1475,6 +1549,8 @@ async function writeClipboard(text) {
     if (!copied) throw new Error("Clipboard copy was blocked by the browser.");
 }
 
+// Briefly swap the brief-copy buttons' text to `label` (e.g. "Opening") and
+// disable them, then restore the original label after a short delay.
 function flashBriefButtons(label) {
     const buttons = [
         document.getElementById("copy-chatgpt-brief"),
@@ -1500,6 +1576,8 @@ document.getElementById("chat-copy-brief")?.addEventListener("click", () => {
     if (!copyChatGptBrief()) showPopupBlockedNotice(() => copyChatGptBrief());
 });
 
+// Render clickable follow-up question chips; clicking one fills the hero
+// input and immediately sends it.
 function renderFollowUpPrompts(prompts = []) {
     const container = document.getElementById("follow-up-prompts");
     if (!container) return;
@@ -1518,6 +1596,8 @@ function renderFollowUpPrompts(prompts = []) {
     });
 }
 
+// Clear/hide the market explainer panel (currently unused — always hides;
+// kept as the reset hook other render calls invoke between market switches).
 function renderMarketExplainer(data) {
     const container = document.getElementById("market-explainer");
     if (!container) return;
@@ -1525,6 +1605,8 @@ function renderMarketExplainer(data) {
     container.innerHTML = "";
 }
 
+// Fetch and render follow-up question suggestions for the active market
+// context (and optionally the just-asked question).
 async function loadFollowUpPrompts(question = "") {
     if (!activeBriefContext.genre && !activeBriefContext.tag) return;
     const params = new URLSearchParams();
@@ -1541,6 +1623,7 @@ async function loadFollowUpPrompts(question = "") {
     }
 }
 
+// Render the side-by-side market comparison cards from a compare API response.
 function renderCompareResults(data) {
     const container = document.getElementById("compare-results");
     if (!container) return;
@@ -1564,6 +1647,8 @@ function renderCompareResults(data) {
     renderFollowUpPrompts(data.follow_up_prompts || []);
 }
 
+// Compare the active market (genre or tag) against the genre/subgenre picked
+// in the compare dropdowns, and render the result.
 async function runCompare() {
     const genrePick = document.getElementById("compare-value")?.value;
     const tagPick   = document.getElementById("compare-sub-value")?.value;
@@ -1611,6 +1696,8 @@ async function runCompare() {
     renderCompareResults(data);
 }
 
+// Render the Concept Analyzer's results (likely market, opportunity read,
+// follow-up prompts) and stash the raw response for use by the brief handoff.
 function renderConceptResults(data) {
     conceptResults.classList.remove("hidden");
     latestConceptAnalysis = data;
@@ -1645,6 +1732,7 @@ function renderConceptResults(data) {
     });
 }
 
+// Submit the concept-description textarea to the concept-analysis endpoint and render the result.
 async function analyzeConcept() {
     const description = conceptInput?.value.trim();
     if (!description) return;
@@ -1679,10 +1767,13 @@ let currentBaseUrl = "";
 let activeSort   = "revenue";
 let activeFilters = {};
 
+// Number of result pages for the current game total and page size.
 function totalPages() {
     return Math.max(1, Math.ceil(totalGames / activeLimit));
 }
 
+// Render one page of game cards into the results grid, update the results
+// count text and limit-button states, and rebuild pagination.
 function renderGrid(games) {
     const grid = document.getElementById("results-grid");
     grid.innerHTML = "";
@@ -1709,6 +1800,8 @@ function renderGrid(games) {
     renderPagination();
 }
 
+// Render page-number buttons for the results grid, showing first/last page,
+// the current page, a couple neighbors, and "…" gaps between them.
 function renderPagination() {
     const el    = document.getElementById("pagination");
     const pages = totalPages();
@@ -1729,6 +1822,8 @@ function renderPagination() {
     el.innerHTML = html;
 }
 
+// Build (once) the results toolbar (sort/filter/export/page-size controls)
+// and its filter row, wiring up all their event listeners.
 function buildToolbar() {
     if (document.getElementById("results-toolbar")) return;
 
@@ -1809,6 +1904,7 @@ function buildToolbar() {
     });
 }
 
+// Read the filter row's input values into activeFilters and reload page 0.
 function applyFilters() {
     const minPrice = document.getElementById("f-min-price").value;
     const maxPrice = document.getElementById("f-max-price").value;
@@ -1837,6 +1933,7 @@ document.getElementById("pagination").addEventListener("click", (e) => {
     }
 });
 
+// Build the query string for the current page/limit/sort/filters state.
 function buildQueryString() {
     const params = new URLSearchParams();
     params.set("page", currentPage);
@@ -1848,6 +1945,9 @@ function buildQueryString() {
     return params.toString();
 }
 
+// Fetch and render the current page of results from currentBaseUrl. Handles
+// both endpoint shapes: a bare array (total = its length) or a
+// {total, games} object (paginated server-side).
 async function loadPage() {
     try {
         const sep = currentBaseUrl.includes("?") ? "&" : "?";
@@ -1942,11 +2042,13 @@ const GENRE_QUIPS = {
     ],
 };
 
+// Pick a random loading quip for the given genre (or the generic pool if none).
 function randomQuip(genre) {
     const pool = GENRE_QUIPS[genre] || GENRE_QUIPS["default"];
     return pool[Math.floor(Math.random() * pool.length)];
 }
 
+// Show the loading spinner + quip in the results grid while a fetch is in flight.
 function showLoading() {
     const grid = document.getElementById("results-grid");
     grid.innerHTML = `<div class="loading-state"><div class="chat-typing"><span></span><span></span><span></span></div><p class="loading-quip">${randomQuip(activeGenre)}</p></div>`;
@@ -1954,6 +2056,8 @@ function showLoading() {
     document.getElementById("pagination").innerHTML = "";
 }
 
+// Entry point for showing a new results list (genre/tag/search): resets
+// paging/sort/filter state, sets up the toolbar, and loads page 0.
 async function fetchGames(baseUrl, title) {
     currentBaseUrl = baseUrl;
     activeLimit    = activeLimit || 50;
@@ -1980,6 +2084,8 @@ async function fetchGames(baseUrl, title) {
     await loadPage();
 }
 
+// Build a game result card (image, title, review score, revenue estimate,
+// top tags) that opens the detail panel on click or the Steam client on double-click.
 function buildCard(game) {
     const score      = game.review_summary?.positive_percent ?? 0;
     const scoreClass = score >= 70 ? "positive" : score >= 40 ? "mixed" : "negative";
@@ -2027,6 +2133,7 @@ function buildCard(game) {
 // Detail Panel
 // ----------------------------
 
+// Fetch a single game's full data and render it into the detail modal.
 async function openDetail(appId) {
     const res  = await fetch(`/api/games/${appId}`);
     const game = await res.json();
@@ -2203,6 +2310,8 @@ const lightboxNext = document.getElementById("lightbox-next");
 let galleryImages = [];
 let galleryIndex = 0;
 
+// Show the gallery image at `index` (wrapping around) and toggle prev/next
+// arrow visibility based on whether there's more than one image.
 function showGalleryImage(index) {
     if (!galleryImages.length) return;
     galleryIndex = (index + galleryImages.length) % galleryImages.length;
@@ -2212,6 +2321,7 @@ function showGalleryImage(index) {
     lightboxNext.classList.toggle("hidden", !multi);
 }
 
+// Open the image lightbox over a set of images, starting at startIndex.
 function openLightbox(images, startIndex, alt = "") {
     galleryImages = images.filter(Boolean);
     if (!galleryImages.length) return;
@@ -2220,6 +2330,7 @@ function openLightbox(images, startIndex, alt = "") {
     imageLightbox.classList.remove("hidden");
 }
 
+// Close the image lightbox and clear its state.
 function closeLightbox() {
     imageLightbox.classList.add("hidden");
     lightboxImage.src = "";
@@ -2261,6 +2372,7 @@ function formatMoney(value) {
     return "$" + value;
 }
 
+// Compact a number to "1.2M" / "3K" style, or "N/A" for null/zero.
 function formatNumber(value) {
     if (value == null || value === 0) return "N/A";
     if (value >= 1_000_000) return (value / 1_000_000).toFixed(1) + "M";
@@ -2268,22 +2380,26 @@ function formatNumber(value) {
     return value.toString();
 }
 
+// Convert minutes into a rounded-hours display string like "12h", or "N/A" if unset.
 function formatPlaytime(minutes) {
     if (!minutes) return "N/A";
     const hours = minutes / 60;
     return (hours >= 10 ? Math.round(hours) : hours.toFixed(1)) + "h";
 }
 
+// Render a confidence object's label, falling back to "score/100" or "estimate".
 function formatConfidence(confidence) {
     if (!confidence) return "estimate";
     return confidence.label || `${confidence.score || ""}/100`;
 }
 
+// Format a percentage delta with an explicit "+" sign for positive values.
 function formatPct(value) {
     if (value == null) return "N/A";
     return `${value > 0 ? "+" : ""}${value}%`;
 }
 
+// Format a plain number delta with an explicit "+" sign for positive values.
 function signedNumber(value) {
     if (value == null) return "N/A";
     return `${value > 0 ? "+" : ""}${value}`;
@@ -2326,6 +2442,8 @@ chatInput.addEventListener("keydown", (e) => {
 
 chatSend.addEventListener("click", sendChatMessage);
 
+// Append a chat bubble (role: "user" or "assistant") to the chat log and
+// scroll to the bottom; returns the wrapper element.
 function appendMessage(role, html) {
     const wrap   = document.createElement("div");
     wrap.className = `chat-message ${role}`;
@@ -2338,6 +2456,7 @@ function appendMessage(role, html) {
     return wrap;
 }
 
+// Show the animated "typing" indicator bubble while awaiting a chat response.
 function showTyping() {
     const wrap = document.createElement("div");
     wrap.className = "chat-message assistant";
@@ -2347,11 +2466,15 @@ function showTyping() {
     chatMsgs.scrollTop = chatMsgs.scrollHeight;
 }
 
+// Remove the "typing" indicator bubble once a response has arrived.
 function removeTyping() {
     const el = document.getElementById("chat-typing-indicator");
     if (el) el.remove();
 }
 
+// Minimal markdown-to-HTML conversion (code blocks/inline code, headers,
+// bold/italic, bullet lists, paragraphs) for rendering chat responses —
+// not a full markdown parser, just enough for the chat backend's typical output.
 function renderMarkdown(text) {
     return text
         .replace(/```[\s\S]*?```/g, m => `<pre style="background:#0a0a14;padding:8px;border-radius:6px;overflow-x:auto;font-size:0.78rem;margin:5px 0">${m.replace(/```\w*\n?/g, "").replace(/</g,"&lt;")}</pre>`)
@@ -2370,10 +2493,13 @@ function renderMarkdown(text) {
         .replace(/$/, "</p>");
 }
 
+// Escape &/</> so untrusted text can be safely inserted as innerHTML.
 function escapeHtml(str) {
     return str.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
 }
 
+// Send the chat widget's input to the free in-app /api/chat endpoint
+// (the no-LLM answer_without_llm backend) and render the response.
 async function sendChatMessage() {
     const message = chatInput.value.trim();
     if (!message) return;

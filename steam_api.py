@@ -96,32 +96,32 @@ STEAM_SUBGENRES = {
 }
 
 
+# Fetch the top ~100 games by players in the last 2 weeks from SteamSpy.
 def get_steamspy_top_games():
-    """Fetch the top ~100 games by players in the last 2 weeks from SteamSpy."""
     response = requests.get(STEAMSPY_URL, params={"request": "top100in2weeks"})
     if response.status_code == 200:
         return response.json()
     return {}
 
 
+# Fetch top games for a specific genre from SteamSpy.
 def get_steamspy_by_genre(genre):
-    """Fetch top games for a specific genre from SteamSpy."""
     response = requests.get(STEAMSPY_URL, params={"request": "genre", "genre": genre})
     if response.status_code == 200:
         return response.json()
     return {}
 
 
+# Fetch top games for a specific tag/subgenre from SteamSpy.
 def get_steamspy_by_tag(tag):
-    """Fetch top games for a specific tag/subgenre from SteamSpy."""
     response = requests.get(STEAMSPY_URL, params={"request": "tag", "tag": tag})
     if response.status_code == 200:
         return response.json()
     return {}
 
 
+# Fetch estimated owners and revenue data for a game from SteamSpy.
 def get_steamspy_details(app_id):
-    """Fetch estimated owners and revenue data for a game from SteamSpy."""
     response = requests.get(STEAMSPY_URL, params={"request": "appdetails", "appid": app_id})
     if response.status_code == 200:
         try:
@@ -131,8 +131,8 @@ def get_steamspy_details(app_id):
     return {}
 
 
+# Fetch full game details from the Steam Store API. Retries on connection errors.
 def get_steam_game_details(app_id, retries=3):
-    """Fetch full game details from the Steam Store API. Retries on connection errors."""
     for attempt in range(retries):
         try:
             response = requests.get(STEAM_STORE_URL, params={"appids": app_id, "cc": "us", "l": "en"}, timeout=10)
@@ -154,8 +154,8 @@ def get_steam_game_details(app_id, retries=3):
             return {}
 
 
+# Convert Steam's category list into boolean feature flags.
 def parse_categories(categories):
-    """Convert Steam's category list into boolean feature flags."""
     ids = {c.get("id") for c in categories}
     return {
         "is_single_player":         2  in ids,
@@ -174,15 +174,15 @@ def parse_categories(categories):
     }
 
 
+# Strip HTML tags from Steam's supported languages string.
 def parse_languages(raw):
-    """Strip HTML tags from Steam's supported languages string."""
     import re
     clean = re.sub(r"<[^>]+>", "", raw or "")
     return [l.strip() for l in clean.split(",") if l.strip()]
 
 
+# Combine Steam and SteamSpy data into our schema format.
 def parse_game(steam_data, spy_data):
-    """Combine Steam and SteamSpy data into our schema format."""
     if not steam_data:
         return None
 

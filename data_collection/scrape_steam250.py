@@ -53,6 +53,7 @@ RATING_PCT_PATTERN = re.compile(r"width:\s*(?P<pct>\d+)%")
 PRICE_PATTERN = re.compile(r"<span>\s*\$(?P<price>[\d.]+)\s*</span>")
 
 
+# Strip surrounding whitespace/quotes from a scraped title.
 def _clean_title(raw):
     raw = raw.strip()
     if raw.startswith('"') and raw.endswith('"'):
@@ -60,6 +61,8 @@ def _clean_title(raw):
     return raw.strip()
 
 
+# Parse one row's worth of HTML into a rank/title/score/etc. dict, or None
+# if it doesn't look like a real entry (missing app id/title).
 def _parse_row(chunk, rank):
     app_match = APP_ID_TITLE.search(chunk)
     if not app_match:
@@ -82,6 +85,7 @@ def _parse_row(chunk, rank):
     }
 
 
+# GET a steam250.com list page's raw HTML, or "" on any error.
 def fetch_list(path):
     url = f"https://steam250.com/{path}"
     try:
@@ -95,6 +99,7 @@ def fetch_list(path):
         return ""
 
 
+# Split a list page's HTML into per-game chunks and parse each into a row dict.
 def parse_rows(html):
     chunks = ROW_SPLIT.split(html)[1:]
     rows = []
@@ -105,6 +110,7 @@ def parse_rows(html):
     return rows
 
 
+# Upsert parsed rows into curated_lists, keyed by (list_name, year, steam_app_id).
 def save_list(list_name, year, rows):
     now = datetime.now(timezone.utc)
     for row in rows:
@@ -122,6 +128,7 @@ def save_list(list_name, year, rows):
     print(f"  Saved {len(rows)} entries for {list_name} (year={year})")
 
 
+# Fetch and save the Top 250 list for each year in year_range.
 def scrape_yearly(year_range):
     for year in year_range:
         print(f"Fetching Top 250 for {year}...")
@@ -134,6 +141,7 @@ def scrape_yearly(year_range):
         time.sleep(SLEEP_BETWEEN)
 
 
+# Fetch and save one of the non-yearly named lists (hidden_gems, most_played, ...).
 def scrape_named_list(path, list_name):
     print(f"Fetching {list_name}...")
     html = fetch_list(path)
@@ -153,6 +161,7 @@ NAMED_LISTS = {
 }
 
 
+# Entry point: scrape whichever lists were requested (default: everything).
 def run(year_range=None, lists=None):
     lists = lists or list(NAMED_LISTS.keys()) + ["yearly"]
 

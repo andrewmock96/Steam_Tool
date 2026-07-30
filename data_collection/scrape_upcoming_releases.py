@@ -71,8 +71,8 @@ TAG_NAME = re.compile(r'class="app_tag" style="display: none;">\s*([^<]+?)\s*</a
 TAG_SLEEP = 1.5
 
 
+# Scrape the pre-release tag list off a game's own Steam store page.
 def fetch_store_tags(app_id):
-    """Scrape the pre-release tag list off a game's own Steam store page."""
     url = f"https://store.steampowered.com/app/{app_id}"
     try:
         r = requests.get(url, headers=HEADERS, timeout=20)
@@ -88,8 +88,8 @@ def fetch_store_tags(app_id):
     return TAG_NAME.findall(block.group(1))
 
 
+# For coming-soon games with no tags yet, scrape and store real Steam tags.
 def backfill_tags(upcoming_docs):
-    """For coming-soon games with no tags yet, scrape and store real Steam tags."""
     needing_tags = [g for g in upcoming_docs if not g.get("tags")]
     print(f"Backfilling tags for {len(needing_tags)} coming-soon games with no tags yet...")
 
@@ -106,6 +106,9 @@ def backfill_tags(upcoming_docs):
     print(f"  Backfilled tags for {updated} of {len(needing_tags)} games.")
 
 
+# Entry point: sync currently-coming-soon games into upcoming_games, mark
+# any previously-tracked games that have since launched, and (if backfill)
+# scrape tags for anything still missing them.
 def snapshot(genre=None, backfill=True):
     now = datetime.now(timezone.utc)
 

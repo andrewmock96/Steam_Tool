@@ -16,9 +16,9 @@ from market_insights import summarize_market, upcoming_competitors
 market_bp = Blueprint("market", __name__)
 
 
+# Compute TAM and outlier-adjusted benchmarks for a genre.
 @market_bp.route("/api/market/genre/<genre>")
 def get_market_overview(genre):
-    """Compute TAM and outlier-adjusted benchmarks for a genre."""
     summary = summarize_market(games_col, genre=genre)
     if not summary:
         return jsonify({"error": "No games found for this genre"}), 404
@@ -41,9 +41,9 @@ def get_market_overview(genre):
     })
 
 
+# Compute SAM/SOM and outlier-adjusted benchmarks for a tag.
 @market_bp.route("/api/market/tag/<tag>")
 def get_market_by_tag(tag):
-    """Compute SAM/SOM and outlier-adjusted benchmarks for a tag."""
     genre = request.args.get("genre") or None
     summary = summarize_market(games_col, genre=genre, tag=tag)
     if not summary:
@@ -69,9 +69,9 @@ def get_market_by_tag(tag):
     })
 
 
+# Get competitor analysis for a genre or tag.
 @market_bp.route("/api/market/competitors")
 def get_competitors():
-    """Get competitor analysis for a genre or tag."""
     genre = request.args.get("genre", "")
     tag = request.args.get("tag", "")
 
@@ -91,9 +91,9 @@ def get_competitors():
     return jsonify(results)
 
 
+# Future competitors currently in Steam's coming-soon queue for a genre/tag.
 @market_bp.route("/api/market/upcoming")
 def get_upcoming_competitors():
-    """Future competitors currently in Steam's coming-soon queue for a genre/tag."""
     genre = request.args.get("genre", "") or None
     tag = request.args.get("tag", "") or None
     limit = request.args.get("limit", 12)
@@ -111,9 +111,9 @@ def get_upcoming_competitors():
     })
 
 
+# Side-by-side market summary for two genres/tags (the 'Compare Markets' UI).
 @market_bp.route("/api/insights/compare")
 def compare_markets():
-    """Side-by-side market summary for two genres/tags (the 'Compare Markets' UI)."""
     left_type = request.args.get("left_type", "genre")
     left_value = request.args.get("left") or ""
     left_genre = left_value if left_type == "genre" else request.args.get("left_genre") or None

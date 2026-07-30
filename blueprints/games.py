@@ -20,9 +20,9 @@ from virtual_tags import build_tag_matcher, build_virtual_tag_query, game_matche
 games_bp = Blueprint("games", __name__)
 
 
+# Search games by title. Falls back to Steam API if nothing found locally.
 @games_bp.route("/api/games/search")
 def search_games():
-    """Search games by title. Falls back to Steam API if nothing found locally."""
     query = request.args.get("q", "")
     if not query:
         return jsonify({"error": "No search query provided"}), 400
@@ -63,9 +63,9 @@ def search_games():
     return jsonify(results)
 
 
+# Get full details for a single game. Fetches from Steam if not in database.
 @games_bp.route("/api/games/<int:app_id>")
 def get_game(app_id):
-    """Get full details for a single game. Fetches from Steam if not in database."""
     game = games_col.find_one({"steam_app_id": app_id}, {"_id": 0})
 
     if not game:
@@ -83,8 +83,8 @@ def get_game(app_id):
     return jsonify(game)
 
 
+# Build a MongoDB match dict from query string filter params.
 def _parse_filters(args):
-    """Build a MongoDB match dict from query string filter params."""
     filters = {}
     min_price = args.get("min_price", type=float)
     max_price = args.get("max_price", type=float)
@@ -108,8 +108,8 @@ _count_cache = {}
 _count_cache_time = {}
 
 
+# Cache document counts for 5 minutes to avoid repeated full scans.
 def _cached_count(match_query):
-    """Cache document counts for 5 minutes to avoid repeated full scans."""
     key = str(sorted(match_query.items()))
     now = _time.time()
     if key in _count_cache and now - _count_cache_time.get(key, 0) < 300:
@@ -135,11 +135,9 @@ CARD_FIELDS = {
 }
 
 
+# Aggregation pipeline with configurable sort. Returns only card-relevant
+# fields for faster queries and smaller responses.
 def _sorted_games_pipeline(match_query, page, limit, sort_by="revenue"):
-    """
-    Aggregation pipeline with configurable sort.
-    Returns only card-relevant fields for faster queries and smaller responses.
-    """
     sort_map = {
         "revenue":    {"estimated_revenue.low": -1},
         "reviews":    {"review_summary.total_reviews": -1},
@@ -164,10 +162,10 @@ def _sorted_games_pipeline(match_query, page, limit, sort_by="revenue"):
     return results, total
 
 
+# In-Python equivalent of _sorted_games_pipeline's $sort, for virtual-tag
+# result sets that were already pulled out of Mongo and filtered in Python
+# (so there's no query left to attach a database-level sort to).
 def _sort_virtual_games(games, sort_by):
-    """In-Python equivalent of _sorted_games_pipeline's $sort, for virtual-tag
-    result sets that were already pulled out of Mongo and filtered in Python
-    (so there's no query left to attach a database-level sort to)."""
     def revenue_key(game):
         return (game.get("estimated_revenue") or {}).get("low", 0)
 
@@ -195,10 +193,10 @@ def _sort_virtual_games(games, sort_by):
     return sorted(games, key=key_fn, reverse=reverse)
 
 
+# Fetch, filter, sort, and paginate a virtual tag's matching games — the
+# whole set has to be pulled from Mongo before filtering/paging can happen,
+# since the match logic can't be expressed as a Mongo query.
 def _virtual_tag_results(tag, genre, page, limit, sort_by, filters):
-    """Fetch, filter, sort, and paginate a virtual tag's matching games —
-    the whole set has to be pulled from Mongo before filtering/paging can
-    happen, since the match logic can't be expressed as a Mongo query."""
     query = build_virtual_tag_query(tag, genre=genre or None) or {"delisted": {"$ne": True}}
     query.update(filters)
     docs = list(games_col.find(query, CARD_FIELDS))
@@ -213,9 +211,9 @@ def _virtual_tag_results(tag, genre, page, limit, sort_by, filters):
     return results, len(filtered)
 
 
+# Export all games in a genre as CSV.
 @games_bp.route("/api/export/genre/<genre>")
 def export_genre_csv(genre):
-    """Export all games in a genre as CSV."""
     import csv, io
     query = {"genres": genre, **_parse_filters(request.args)}
     games = list(games_col.find(query, {"_id": 0}).sort("estimated_revenue.low", -1).limit(500))
@@ -246,9 +244,9 @@ def export_genre_csv(genre):
                     headers={"Content-Disposition": f"attachment; filename={genre}_games.csv"})
 
 
+# Paginated, sortable, filterable game grid for a whole genre (the main market browsing view).
 @games_bp.route("/api/games/genre/<genre>")
 def get_games_by_genre(genre):
-    """Paginated, sortable, filterable game grid for a whole genre (the main market browsing view)."""
     page    = max(0, int(request.args.get("page", 0)))
     limit   = min(150, max(1, int(request.args.get("limit", 50))))
     sort_by = request.args.get("sort", "revenue")
@@ -260,10 +258,10 @@ def get_games_by_genre(genre):
     return jsonify({"games": results, "total": total, "page": page, "limit": limit})
 
 
+# Same as get_games_by_genre but scoped to a tag/subgenre, with the
+# virtual-tag fallback path for tags that aren't a plain field match.
 @games_bp.route("/api/games/tag/<tag>")
 def get_games_by_tag(tag):
-    """Same as get_games_by_genre but scoped to a tag/subgenre, with the
-    virtual-tag fallback path for tags that aren't a plain field match."""
     genre   = request.args.get("genre", "")
     page    = max(0, int(request.args.get("page", 0)))
     limit   = min(150, max(1, int(request.args.get("limit", 50))))
@@ -282,15 +280,14 @@ def get_games_by_tag(tag):
     return jsonify({"games": results, "total": total, "page": page, "limit": limit})
 
 
+# Genre player trend data from daily snapshots for the home screen chart.
+#
+# Returns the full snapshot history (no date cutoff) — genre_snapshots is
+# written once a day, so this stays small for a long time. If it grows
+# large enough to matter, cap it here or add a time-range param rather
+# than silently truncating what the frontend requests.
 @games_bp.route("/api/overview")
 def get_overview():
-    """Genre player trend data from daily snapshots for the home screen chart.
-
-    Returns the full snapshot history (no date cutoff) — genre_snapshots is
-    written once a day, so this stays small for a long time. If it grows
-    large enough to matter, cap it here or add a time-range param rather
-    than silently truncating what the frontend requests.
-    """
     from db import db as mongo_db
 
     genres = ["Action", "Adventure", "Casual", "Indie", "RPG",
@@ -314,9 +311,9 @@ _subgenre_cache = {}
 _subgenre_cache_time = {}
 
 
+# Return subgenres for a genre with counts. Cached for 1 hour.
 @games_bp.route("/api/subgenres/<genre>")
 def get_subgenres(genre):
-    """Return subgenres for a genre with counts. Cached for 1 hour."""
     from market_taxonomy import children_for_subgenre
 
     now = _time.time()

@@ -129,38 +129,40 @@ VIRTUAL_TAG_RULES = {
 VIRTUAL_TAG_RULES["Bikes"] = VIRTUAL_TAG_RULES["Cycling"]
 
 
+# True if this tag needs the virtual-tag rule/filter path instead of a plain Mongo tag query.
 def is_virtual_tag(tag):
-    """True if this tag needs the virtual-tag rule/filter path instead of a plain Mongo tag query."""
     return tag in VIRTUAL_TAG_RULES
 
 
+# Case-insensitive exact-match $in query for a real tag, including any TAG_ALIASES.
 def build_tag_matcher(tag):
-    """Case-insensitive exact-match $in query for a real tag, including any TAG_ALIASES."""
     tags = [tag] + TAG_ALIASES.get(tag, [])
     return {"$in": [re.compile(f"^{re.escape(value)}$", re.IGNORECASE) for value in tags]}
 
 
+# Combine a list of regex fragments into one case-insensitive alternation pattern.
 def _compile_patterns(patterns):
-    """Combine a list of regex fragments into one case-insensitive alternation pattern."""
     if not patterns:
         return None
     return re.compile("|".join(patterns), re.IGNORECASE)
 
 
+# Normalize a list of tag/genre strings into a lowercase set for fast membership checks.
 def _lower_set(values):
     return {str(value).strip().lower() for value in (values or []) if value}
 
 
+# True if the title matches any of the given regex patterns.
 def _title_matches(title, patterns):
     return bool(_compile_patterns(patterns).search(title or "")) if patterns else False
 
 
+# Python-side (not Mongo-query-side) check for whether a game document
+# actually satisfies a virtual tag's rule. Called after
+# build_virtual_tag_query() has already narrowed the candidate set from
+# Mongo — this does the part of the matching that can't be expressed as a
+# query (regex title matching, tag-combination logic).
 def game_matches_virtual_tag(game, tag):
-    """Python-side (not Mongo-query-side) check for whether a game document
-    actually satisfies a virtual tag's rule. Called after
-    build_virtual_tag_query() has already narrowed the candidate set from
-    Mongo — this does the part of the matching that can't be expressed as a
-    query (regex title matching, tag-combination logic)."""
     rule = VIRTUAL_TAG_RULES.get(tag)
     if not rule:
         return False
@@ -212,14 +214,14 @@ def game_matches_virtual_tag(game, tag):
     )
 
 
+# Best-effort Mongo query to narrow candidates for a virtual tag before the
+# precise Python-side filter (game_matches_virtual_tag) runs. This is
+# intentionally a superset — it can't perfectly express the rule (e.g.
+# include_title_patterns regex can be pushed into the query, but the
+# per-tag bespoke logic in game_matches_virtual_tag can't), so results
+# still need the Python filter applied afterward. Returns None for a
+# non-virtual tag, signaling callers to use the normal tag-query path.
 def build_virtual_tag_query(tag, genre=None):
-    """Best-effort Mongo query to narrow candidates for a virtual tag before
-    the precise Python-side filter (game_matches_virtual_tag) runs. This is
-    intentionally a superset — it can't perfectly express the rule (e.g.
-    include_title_patterns regex can be pushed into the query, but the
-    per-tag bespoke logic in game_matches_virtual_tag can't), so results
-    still need the Python filter applied afterward. Returns None for a
-    non-virtual tag, signaling callers to use the normal tag-query path."""
     rule = VIRTUAL_TAG_RULES.get(tag)
     if not rule:
         return None

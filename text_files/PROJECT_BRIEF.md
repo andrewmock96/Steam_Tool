@@ -12,15 +12,27 @@ Free tool → trust/value → convert game devs into PaperOS customers when reve
 When the tool displays revenue estimates (e.g. "your game could earn $40k–$150k"), surface a natural CTA:
 > "When you're ready to protect that revenue with proper contracts and legal structure, PaperOS can help."
 
-Non-pushy, value-driven. Exact copy/placement to be confirmed with boss.
+Non-pushy, value-driven. Exact copy/placement still to be confirmed with boss — this is the one open item carried over from the original plan.
+
+---
+
+## Status: MVP built and running
+
+This started as a 6-week MVP plan (see the original build order at the
+bottom of this doc). It's built: the Flask app is live, the database has
+been continuously expanding since launch (168k+ games as of this writing),
+and four scheduled jobs keep the data fresh automatically. A few decisions
+from the original plan changed along the way — most notably the AI
+approach — see [AI Integration](#ai-integration) below for what actually
+shipped versus what was originally planned.
 
 ---
 
 ## MVP Scope (v1)
 - Steam only (Epic, Xbox, PlayStation, Nintendo = later phases)
 - Web app — keeps funnel to PaperOS seamless
-- AI-powered assistant (Claude) for natural language queries
-- Target launch: ~6 weeks
+- Free, no-API-cost AI handoff for natural language queries (see below —
+  this replaced the originally-planned in-app Claude integration)
 
 ---
 
@@ -35,71 +47,88 @@ Non-pushy, value-driven. Exact copy/placement to be confirmed with boss.
 ---
 
 ## Data Sources
-| Source | What it provides |
-|---|---|
-| Steam Store API (store.steampowered.com/api) | Game details, price, genres, tags, descriptions, accessibility |
-| Steam Web API (api.steampowered.com) | Player counts, reviews, news, workshop data |
-| SteamSpy API (steamspy.com/api) | Estimated owners, playtime, revenue ranges |
 
-No Steam Developer account currently — using public endpoints and SteamSpy for estimates.
+Full detail — every external API, what each field traces back to, how the
+revenue model works, and every MongoDB collection — now lives in its own
+doc: **[`DATA_SOURCES.md`](DATA_SOURCES.md)**. Short version: Steam Store
+API + SteamSpy API (both free, no key) are the core; IGDB and
+IsThereAnyDeal add optional enrichment; steam250.com is scraped for a
+curated "well-received indie games" proxy list. No paid data source is used
+anywhere in this pipeline.
 
-**Data disclaimer:** Sales and revenue figures are estimates, not official Steam data. Steam does not publicly release sales numbers. Estimates are derived from SteamSpy, which reverse-engineers owner counts from public data — the same methodology used by SteamDB, GameDiscoverCo, and VG Insights. All data should be presented to users as estimates, not facts. Both the Steam Store API and SteamSpy API are free, public, and legal to use for research tooling.
+**Data disclaimer:** Sales and revenue figures are estimates, not official Steam data. Steam does not publicly release sales numbers. Estimates are derived from SteamSpy, which reverse-engineers owner counts from public data — the same methodology used by SteamDB, GameDiscoverCo, and VG Insights. All data should be presented to users as estimates, not facts.
 
 ---
 
 ## Data We Collect Per Game
 - Title, description, genres, tags/subgenres
 - Developer, publisher, release date
-- Price, discounts
-- Review scores + review text
+- Price, discounts, historical low price (via ITAD)
+- Review scores
 - Current/peak player counts
-- News & updates
-- Workshop data
-- Accessibility features
+- Playtime (currently unreliable — see `DATA_SOURCES.md`'s known-issues note)
+- Steam feature flags (multiplayer, co-op, achievements, controller/VR support, etc.)
+- Screenshots, DLC count, Metacritic score
+- Optional: IGDB themes/game modes/critic rating (only for games `enrich_igdb.py` has run against)
 
 ---
 
 ## Derived Outputs (Estimated — not available directly from Steam)
-- **Estimated copies sold** — review ratio method: reviews × 30–50
-- **Estimated revenue range** — owners × price × 0.7 (Steam's 70% cut to devs)
-- **TAM / SAM / SOM** — for genre/subgenre segments
+- **Estimated owners** — SteamSpy's own modeled owner range
+- **Estimated revenue range** — owners × blended average price, minus Steam's real tiered revenue cut (70/75/80% to devs depending on lifetime gross) — see `DATA_SOURCES.md` §5 for the exact formula
+- **TAM / SAM / SOM** — for genre/subgenre segments, computed in `market_insights.py`
 
 ---
 
-## AI Integration (Claude)
-- Users type natural language questions or goals
-- Claude queries the database to pull real data
-- Outputs actionable results: gap analysis, checklists, recommendations
+## AI Integration
 
-**Example interaction:**
-> User: "I want to launch my game on Steam next month."
-> Tool: Missing requirements, store page recommendations, launch checklist, marketing checklist
+**What actually shipped is not what was originally planned.** The original
+plan was an in-app Claude API integration (Going Indie pays per query). That
+was built once (`ai_assistant.py`) but abandoned before launch, over API
+cost concerns for a free tool with no revenue yet.
 
-API key: TBD — PaperOS may already have an Anthropic key.
+**What's live instead:** a zero-API-cost design. The app builds a
+structured JSON market brief server-side from real Steam data, and the user
+copies/pastes it into their *own* ChatGPT or Claude account (or whichever
+AI tool they prefer) — Going Indie never calls a paid LLM API itself. See
+`templates/brief_loader.html` and the `/api/insights/chatgpt-brief` /
+`/brief-loader` flow in `blueprints/insights.py` for how this works. There's
+also a small free, no-LLM chat widget in the app itself
+(`/api/chat` → `answer_without_llm()` in `market_insights.py`) that answers
+simple questions directly from the database with zero AI cost at all.
+
+If Going Indie ever has budget for a real per-query LLM cost, the original
+in-app-Claude approach could be revisited — but the current design was a
+deliberate choice, not a stopgap someone forgot to finish.
 
 ---
 
 ## Tech Stack
 | Layer | Technology | Why |
 |---|---|---|
-| Frontend | HTML / CSS / JavaScript | Andrew's existing strength |
-| Backend | Python + Flask | Prior Flask experience, great for APIs |
+| Frontend | HTML / CSS / JavaScript (no build step) | Andrew's existing strength |
+| Backend | Python + Flask (blueprints) | Prior Flask experience, great for APIs |
 | Database | MongoDB Atlas | Cloud-hosted, document model fits Steam data, free tier |
-| AI | Claude API (claude-sonnet-4-6) | Best-in-class reasoning, tool use for DB queries |
-| Hosting | Render (or boss's preference) | Andrew has prior experience |
+| AI | None called by the app itself — see [AI Integration](#ai-integration) above | Keeps the tool free to run regardless of usage volume |
+| Data collection | Standalone Python scripts in `data_collection/`, run via Windows Task Scheduler | See `DATA_SOURCES.md` §4 for the full schedule |
+| Hosting | TBD (was Render or boss's preference — unconfirmed) | — |
 
 ---
 
 ## Database Collections (MongoDB Atlas)
-- `games` — full catalog data, synced regularly from Steam APIs
-- `review_snapshots` — time-series review data for trend tracking
-- `player_snapshots` — current/peak player history over time
-- `genre_aggregates` — pre-computed market sizing by genre/tag
+
+See **[`DATA_SOURCES.md`](DATA_SOURCES.md)** for the full, current table of
+every collection, what writes it, and what's in it. Short version: `games`
+is the core catalog; `player_snapshots`, `genre_snapshots`, and
+`tag_snapshots` are time-series history; `upcoming_games`, `curated_lists`,
+`market_stats`, and `expansion_log` support specific features. (An earlier
+version of this list mentioned `review_snapshots` and `genre_aggregates` —
+both were confirmed unused and dropped from the database.)
 
 ---
 
 ## Team
-- **Primary builder:** Andrew — HTML/CSS/JS/Python/Flask/C#/C++/Rust, limited DB experience, learning as we go
+- **Primary builder:** Andrew — HTML/CSS/JS/Python/Flask/C#/C++/Rust, learning MongoDB/data-pipeline work as we go
 - **Boss:** More experienced, occasional input on architecture and PaperOS integration
 - **Others:** Occasional help as needed
 
@@ -107,18 +136,17 @@ API key: TBD — PaperOS may already have an Anthropic key.
 
 ## Open Items (confirm with boss)
 - [ ] Exact PaperOS funnel CTA copy and placement in the tool
-- [ ] Whether PaperOS has an existing Anthropic API key
-- [ ] Final hosting preference
+- [ ] Final hosting decision
 - [ ] Any PaperOS brand guidelines for the tool's design
 
 ---
 
-## Build Order (Step by Step)
-1. Set up MongoDB Atlas + define data schema
-2. Build Steam API data pipeline (fetch + sync game data)
-3. Build Flask backend (API routes for the frontend)
-4. Build frontend (search, competitor analysis, market sizing views)
-5. Add revenue estimation logic
-6. Integrate Claude AI assistant
-7. Add PaperOS funnel touchpoints
-8. Deploy to Render
+## Original Build Order (for history)
+1. Set up MongoDB Atlas + define data schema — done
+2. Build Steam API data pipeline (fetch + sync game data) — done
+3. Build Flask backend (API routes for the frontend) — done
+4. Build frontend (search, competitor analysis, market sizing views) — done
+5. Add revenue estimation logic — done
+6. ~~Integrate Claude AI assistant~~ → replaced with the no-cost brief-handoff design (see [AI Integration](#ai-integration)) — done, different from plan
+7. Add PaperOS funnel touchpoints — **not started**, no PaperOS references exist in the codebase yet
+8. Deploy — **not done**, hosting decision still open

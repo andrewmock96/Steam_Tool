@@ -48,8 +48,8 @@ _DATE_PATTERNS = [
 ]
 
 
+# Best-effort parse of Steam's release_date string. Returns a date or None.
 def parse_release_date(raw):
-    """Best-effort parse of Steam's release_date string. Returns a date or None."""
     if not raw or not isinstance(raw, str):
         return None
     raw = raw.strip()
@@ -62,12 +62,13 @@ def parse_release_date(raw):
     return None
 
 
+# Coerce to a number, treating None/missing as 0 (or `default`).
 def _num(v, default=0):
     return v if isinstance(v, (int, float)) else default
 
 
+# Sample-size-driven confidence label. No stat gets called 'verified' on a thin sample.
 def _confidence_for_sample(n):
-    """Sample-size-driven confidence label. No stat gets called 'verified' on a thin sample."""
     if n >= 200:
         return {"label": "high", "score": 90}
     if n >= 60:
@@ -79,8 +80,8 @@ def _confidence_for_sample(n):
     return {"label": "low (small sample)", "score": 15}
 
 
+# Group games by release month / day-of-week and compute review-score + revenue stats.
 def build_month_day_stats(games, min_reviews, label):
-    """Group games by release month / day-of-week and compute review-score + revenue stats."""
     by_month = defaultdict(list)
     by_day = defaultdict(list)
     parsed_count = 0
@@ -159,6 +160,7 @@ def build_month_day_stats(games, min_reviews, label):
     }
 
 
+# Average/median price per genre, for paid non-delisted games with a real price.
 def build_price_by_genre(genres):
     rows = []
     for genre in genres:
@@ -188,6 +190,8 @@ def build_price_by_genre(genres):
 GENRES = ["Action", "Adventure", "Casual", "Indie", "RPG", "Simulation", "Strategy", "Sports", "Racing"]
 
 
+# Entry point: load games, compute publish-timing + pricing stats overall
+# and per genre, and write them all to market_stats.
 def run(years=None, min_reviews=15):
     print("Loading games from database...")
     all_games = list(games_col.find(

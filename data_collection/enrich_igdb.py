@@ -46,6 +46,8 @@ games_col = db["games"]
 IGDB_URL = "https://api.igdb.com/v4"
 
 
+# IGDB auth runs through Twitch's OAuth (client-credentials grant) — this
+# fetches a short-lived access token to use on every igdb_query() call below.
 def get_twitch_token():
     r = requests.post("https://id.twitch.tv/oauth2/token", params={
         "client_id": TWITCH_CLIENT_ID,
@@ -58,6 +60,7 @@ def get_twitch_token():
     sys.exit(1)
 
 
+# POST an IGDB Apicalypse query, retrying once (recursively) on a 429 rate-limit response.
 def igdb_query(endpoint, body, token):
     try:
         r = requests.post(f"{IGDB_URL}/{endpoint}", headers={
@@ -75,6 +78,9 @@ def igdb_query(endpoint, body, token):
     return []
 
 
+# Entry point: for each un-enriched game (up to `limit`, or every game if
+# all_games), look it up on IGDB by name and write themes/game modes/critic
+# rating/similar games/hype count onto the `igdb` field.
 def enrich(limit=3000, all_games=False):
     token = get_twitch_token()
     print("Got Twitch token.\n")

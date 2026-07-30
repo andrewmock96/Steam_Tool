@@ -69,18 +69,18 @@ from market_taxonomy import (
 insights_bp = Blueprint("insights", __name__)
 
 
+# Structured catalog of facts and derived metrics the product can expose.
 @insights_bp.route("/api/insights/data-points")
 def get_data_points():
-    """Structured catalog of facts and derived metrics the product can expose."""
     return jsonify({
         "data_points": DATA_POINT_CATALOG,
         "disclaimer": "Revenue, owner, and market sizing figures are estimates based on SteamSpy and public Steam data."
     })
 
 
+# Supported external AI tools for no-cost prompt handoff.
 @insights_bp.route("/api/ai-tools")
 def get_ai_tools():
-    """Supported external AI tools for no-cost prompt handoff."""
     return jsonify({
         "default": DEFAULT_AI_TOOL,
         "tools": [
@@ -90,9 +90,9 @@ def get_ai_tools():
     })
 
 
+# List the brief modes (general/quick/competition/pricing) — see BRIEF_MODES in helpers.py.
 @insights_bp.route("/api/brief-modes")
 def get_brief_modes():
-    """List the brief modes (general/quick/competition/pricing) — see BRIEF_MODES in helpers.py."""
     return jsonify({
         "default": "general",
         "modes": [
@@ -102,9 +102,9 @@ def get_brief_modes():
     })
 
 
+# Explain source confidence and estimate methodology.
 @insights_bp.route("/api/insights/accuracy")
 def get_accuracy_model():
-    """Explain source confidence and estimate methodology."""
     return jsonify({
         "source_confidence": SOURCE_CONFIDENCE,
         "estimate_methodology": {
@@ -117,9 +117,9 @@ def get_accuracy_model():
     })
 
 
+# Tool-ready market summary for a genre and/or tag.
 @insights_bp.route("/api/insights/market")
 def get_market_insight():
-    """Tool-ready market summary for a genre and/or tag."""
     genre = request.args.get("genre") or None
     tag = request.args.get("tag") or None
 
@@ -137,9 +137,9 @@ def get_market_insight():
     })
 
 
+# Player-snapshot momentum for a genre or tag.
 @insights_bp.route("/api/insights/momentum")
 def get_market_momentum():
-    """Player-snapshot momentum for a genre or tag."""
     genre = request.args.get("genre") or None
     tag = request.args.get("tag") or None
     days = min(365, max(2, request.args.get("days", default=30, type=int)))
@@ -150,9 +150,9 @@ def get_market_momentum():
     return jsonify(market_momentum(games_col, db, genre=genre, tag=tag, days=days))
 
 
+# Rank genres or tags by estimated market size.
 @insights_bp.route("/api/insights/markets")
 def get_ranked_markets():
-    """Rank genres or tags by estimated market size."""
     market_type = request.args.get("type", "genres")
     genre = request.args.get("genre") or None
     limit = min(100, max(1, request.args.get("limit", default=25, type=int)))
@@ -174,9 +174,9 @@ def get_ranked_markets():
     })
 
 
+# Rank markets with strong demand signals and comparatively addressable competition.
 @insights_bp.route("/api/insights/opportunities")
 def get_opportunities():
-    """Rank markets with strong demand signals and comparatively addressable competition."""
     genre = request.args.get("genre") or None
     limit = min(50, max(1, request.args.get("limit", default=12, type=int)))
     return jsonify({
@@ -186,9 +186,9 @@ def get_opportunities():
     })
 
 
+# Find smaller, more niche subgenres while filtering broad umbrella tags.
 @insights_bp.route("/api/insights/smaller-subgenres")
 def get_smaller_subgenres():
-    """Find smaller, more niche subgenres while filtering broad umbrella tags."""
     genre = request.args.get("genre") or None
     limit = min(50, max(1, request.args.get("limit", default=15, type=int)))
     min_games = min(500, max(5, request.args.get("min_games", default=25, type=int)))
@@ -204,9 +204,9 @@ def get_smaller_subgenres():
     ))
 
 
+# Return the curated genre -> subgenre -> child tag taxonomy.
 @insights_bp.route("/api/taxonomy")
 def get_taxonomy():
-    """Return the curated genre -> subgenre -> child tag taxonomy."""
     genre = request.args.get("genre") or None
     if genre:
         return jsonify({
@@ -221,9 +221,9 @@ def get_taxonomy():
     })
 
 
+# Compare child tags for a broad subgenre such as Shooter or RPG.
 @insights_bp.route("/api/insights/subgenre-children")
 def get_subgenre_children():
-    """Compare child tags for a broad subgenre such as Shooter or RPG."""
     parent = request.args.get("subgenre") or request.args.get("parent")
     genre = request.args.get("genre") or None
     limit = min(50, max(1, request.args.get("limit", default=20, type=int)))
@@ -248,17 +248,17 @@ def get_subgenre_children():
     ))
 
 
+# Show markets doing well and markets that are currently less prominent.
 @insights_bp.route("/api/insights/prominence")
 def get_prominence():
-    """Show markets doing well and markets that are currently less prominent."""
     genre = request.args.get("genre") or None
     limit = min(25, max(1, request.args.get("limit", default=10, type=int)))
     return jsonify(prominence_report(games_col, genre=genre, limit=limit))
 
 
+# Suggested next questions shown as chips after a market summary loads.
 @insights_bp.route("/api/insights/follow-ups")
 def get_follow_ups():
-    """Suggested next questions shown as chips after a market summary loads."""
     genre = request.args.get("genre") or None
     tag = request.args.get("tag") or None
     question = request.args.get("q") or ""
@@ -268,9 +268,9 @@ def get_follow_ups():
     })
 
 
+# Match a free-text game description to likely genres/tags (helpers.analyze_concept).
 @insights_bp.route("/api/insights/concept", methods=["POST"])
 def concept_insight():
-    """Match a free-text game description to likely genres/tags (helpers.analyze_concept)."""
     data = request.get_json(silent=True) or {}
     description = (data.get("description") or "").strip()
     if not description:
@@ -278,8 +278,8 @@ def concept_insight():
     return jsonify(analyze_concept(games_col, description))
 
 
+# Build the market data bundle used by both the JSON API and loader page.
 def build_chatgpt_brief_payload(question="", genre=None, tag=None, brief_mode="general", compare=None, concept_description=""):
-    """Build the market data bundle used by both the JSON API and loader page."""
     inferred = None
     mode = get_brief_mode(brief_mode)
 
@@ -378,8 +378,8 @@ def build_chatgpt_brief_payload(question="", genre=None, tag=None, brief_mode="g
     }
 
 
+# Convert a brief payload into the pasteable ChatGPT prompt.
 def build_chatgpt_prompt(payload, user_question="", brief_mode="general"):
-    """Convert a brief payload into the pasteable ChatGPT prompt."""
     mode = get_brief_mode(brief_mode)
     lines = [
         "You are helping an indie game developer analyze Steam market data.",
@@ -439,9 +439,9 @@ def build_chatgpt_prompt(payload, user_question="", brief_mode="general"):
     return "\n".join(lines)
 
 
+# Bundle a compact data brief users can paste into ChatGPT.
 @insights_bp.route("/api/insights/chatgpt-brief")
 def get_chatgpt_brief():
-    """Bundle a compact data brief users can paste into ChatGPT."""
     genre = request.args.get("genre") or None
     tag = request.args.get("tag") or None
     question = request.args.get("q") or ""
@@ -466,9 +466,9 @@ def get_chatgpt_brief():
     ))
 
 
+# Return the prepared AI handoff prompt.
 @insights_bp.route("/api/insights/chatgpt-prompt")
 def get_chatgpt_prompt():
-    """Return the prepared AI handoff prompt."""
     genre = request.args.get("genre") or None
     tag = request.args.get("tag") or None
     question = request.args.get("q") or ""
@@ -497,9 +497,9 @@ def get_chatgpt_prompt():
     })
 
 
+# Open a dedicated handoff page that copies the brief, then sends the tab to an AI tool.
 @insights_bp.route("/brief-loader")
 def chatgpt_brief_loader():
-    """Open a dedicated handoff page that copies the brief, then sends the tab to an AI tool."""
     ai_tool = get_ai_handoff_tool(request.args.get("ai_tool"))
     return render_template(
         "brief_loader.html",
